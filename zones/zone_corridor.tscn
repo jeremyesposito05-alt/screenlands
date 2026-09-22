@@ -1,0 +1,34 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://world/zone.gd" id="1_zone"]
+[ext_resource type="PackedScene" path="res://world/zone_border.tscn" id="2_border"]
+[ext_resource type="PackedScene" path="res://world/obstacle.tscn" id="3_obstacle"]
+
+[node name="Zone" type="Node2D"]
+script = ExtResource("1_zone")
+display_name = "Couloir"
+
+[node name="Background" type="ColorRect" parent="."]
+offset_right = 192.0
+offset_bottom = 416.0
+color = Color(0.078431, 0.094118, 0.129412, 1)
+
+[node name="ZoneBorder" parent="." instance=ExtResource("2_border")]
+
+[node name="Obstacle1" parent="." instance=ExtResource("3_obstacle")]
+position = Vector2(64, 128)
+
+[node name="Obstacle2" parent="." instance=ExtResource("3_obstacle")]
+position = Vector2(96, 128)
+
+[node name="Obstacle3" parent="." instance=ExtResource("3_obstacle")]
+position = Vector2(128, 128)
+
+[node name="Obstacle4" parent="." instance=ExtResource("3_obstacle")]
+position = Vector2(64, 288)
+
+[node name="Obstacle5" parent="." instance=ExtResource("3_obstacle")]
+position = Vector2(96, 288)
+
+[node name="Obstacle6" parent="." instance=ExtResource("3_obstacle")]
+position = Vector2(128, 288)

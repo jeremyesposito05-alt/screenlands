@@ -1,0 +1,59 @@
+; Screenlands - project settings
+;
+; Une zone vaut exactement un écran : la taille du viewport ci-dessous EST la
+; taille d'une zone. Elle doit rester d'accord avec core/game_config.gd (ZONE_SIZE).
+
+config_version=5
+
+[application]
+
+config/name="Screenlands"
+config/description="Roguelite d'exploration écran par écran, en 2D vue de dessus."
+run/main_scene="res://world/world.tscn"
+config/features=PackedStringArray("4.3", "GL Compatibility")
+config/icon="res://icon.svg"
+
+[display]
+
+; 12 x 26 tuiles de 16 px = 192 x 416, soit un ratio 9:19.5 (iPhone portrait).
+window/size/viewport_width=192
+window/size/viewport_height=416
+; Fenêtre x3 pour travailler confortablement sur PC.
+window/size/window_width_override=576
+window/size/window_height_override=1248
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
+
+[input]
+
+move_left={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":4194319)
+, Object(InputEventKey,"device":-1,"physical_keycode":65)
+]
+}
+move_right={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":4194321)
+, Object(InputEventKey,"device":-1,"physical_keycode":68)
+]
+}
+move_up={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":4194320)
+, Object(InputEventKey,"device":-1,"physical_keycode":87)
+]
+}
+move_down={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":4194322)
+, Object(InputEventKey,"device":-1,"physical_keycode":83)
+]
+}
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+; Pixel art : pas de lissage à l'agrandissement.
+textures/canvas_textures/default_texture_filter=0

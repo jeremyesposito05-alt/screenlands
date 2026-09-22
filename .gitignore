@@ -1,0 +1,19 @@
+# Godot 4 editor cache and generated imports
+.godot/
+
+# Exported builds
+build/
+export/
+*.translation
+
+# Export presets can contain keystore paths and passwords, so keep them local
+export_presets.cfg
+
+# Godot 3 leftovers, harmless to keep ignored
+.import/
+export.cfg
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+*.swp
