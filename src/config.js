@@ -1,11 +1,11 @@
 "use strict";
 
-// Les constantes qui définissent la forme du monde.
+// Les constantes du jeu.
 //
 // Une zone vaut exactement un écran : ZONE_W x ZONE_H est donc aussi la
 // résolution interne du jeu. Tout le reste en est dérivé, y compris les murs
-// et les portes : ce sont les seuls nombres à changer pour essayer une autre
-// taille de zone.
+// et les portes. Les chiffres d'équilibrage sont regroupés en bas : ce sont
+// eux qu'on ajuste après avoir joué.
 
 const Config = Object.freeze({
   TILE: 16,
@@ -18,7 +18,7 @@ const Config = Object.freeze({
   get ZONE_H() { return this.ZONE_H_TILES * this.TILE; },
 
   // Épaisseur du mur qui ceinture une zone, et largeur de la porte centrale
-  // percée dans chacun des quatre côtés.
+  // percée dans chaque côté qui a une voisine.
   get WALL() { return this.TILE; },
   get DOOR() { return this.TILE * 4; },
 
@@ -26,12 +26,42 @@ const Config = Object.freeze({
   // après avoir franchi un bord.
   ENTRY_MARGIN: 8,
 
+  // La physique tourne à pas fixe, indépendamment de la fréquence de l'écran
+  // (60 Hz sur PC, jusqu'à 120 Hz sur un iPhone récent).
+  STEP: 1 / 60,
+
+  // --- Joueur ---
   // En pixels par seconde : la largeur d'une zone se traverse en un peu plus
   // de deux secondes.
   PLAYER_SPEED: 90,
   PLAYER_SIZE: 12,
+  PLAYER_HP: 3,
+  // Après un coup, le joueur est intouchable le temps de s'enfuir.
+  HURT_INVULN: 1.2,
+  HURT_KNOCKBACK: 16,
 
-  // La physique tourne à pas fixe, indépendamment de la fréquence de l'écran
-  // (60 Hz sur PC, jusqu'à 120 Hz sur un iPhone récent).
-  STEP: 1 / 60,
+  // --- Stop ou encore ---
+  // Une gemme vaut GEM_BASE x 2^(distance - 1) : 1, 2, 4, 8... La distance
+  // est comptée en écrans depuis le camp de base.
+  GEM_BASE: 1,
+  GEM_SIZE: 8,
+  // À quelle distance du feu de camp le butin est mis à l'abri.
+  CAMP_RADIUS: 20,
+
+  // --- Ennemis ---
+  // Leur nombre par zone, indexé par la distance au camp de base (au-delà,
+  // la dernière valeur).
+  ENEMIES_BY_DISTANCE: [0, 1, 1, 2, 3],
+  // Toujours plus lents que le joueur : on peut fuir, pas flâner.
+  ENEMY_SPEED: 42,
+  ENEMY_SPEED_PER_DISTANCE: 5,
+  // Temps de réveil à l'entrée dans une zone, pour ne pas être touché avant
+  // d'avoir vu l'ennemi.
+  ENEMY_WAKE: 0.6,
+  // Un ennemi n'apparaît jamais plus près que ça du joueur qui entre.
+  SPAWN_SAFE_DISTANCE: 90,
+
+  // --- Messages ---
+  BANNER_TIME: 2.2,
+  DEATH_PAUSE: 2.5,
 });

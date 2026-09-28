@@ -11,7 +11,7 @@
   const canvas = document.getElementById("game");
   Input.init(document.getElementById("joystick"));
   Render.init(canvas);
-  World.reset();
+  World.newExpedition();
 
   // Au-delà, on considère que le jeu était en pause (onglet caché,
   // téléphone verrouillé) et on ne rattrape pas le temps perdu.
@@ -20,13 +20,14 @@
   let acc = 0;
 
   function frame(now) {
-    acc += Math.min((now - last) / 1000, MAX_FRAME);
+    const dt = Math.min((now - last) / 1000, MAX_FRAME);
     last = now;
+    acc += dt;
     while (acc >= Config.STEP) {
       World.step(Config.STEP, Input.direction());
       acc -= Config.STEP;
     }
-    Render.draw(World.state);
+    Render.draw(World.state, dt);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -43,5 +44,5 @@
   fit();
 
   // Accès pour les tests et le débogage depuis la console.
-  window.Screenlands = { World, Input, Config };
+  window.Screenlands = { World, Input, Config, Save, ZoneRegistry };
 })();

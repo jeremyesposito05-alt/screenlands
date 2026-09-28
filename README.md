@@ -22,20 +22,33 @@ le vrai téléphone à chaque modification.
 
 ## État actuel
 
-C'est le premier prototype. Il contient exactement ce qu'il faut pour valider
-le déplacement et le passage d'un écran à l'autre, et rien de plus :
+Le deuxième prototype : la plus petite version jouable du stop ou encore,
+pour savoir si la tension entre « je continue » et « je rentre » fonctionne
+avant d'investir dans les graphismes et la génération.
 
-- un joueur qui se déplace dans les quatre directions ;
-- quatre zones fixes disposées en grille 2x2 ;
-- des collisions : les murs de bordure et quelques obstacles ;
-- les quatre bords d'écran, avec une porte au milieu de chacun ;
-- le passage d'une zone à la zone voisine en franchissant une porte.
+- **Une carte de 5 x 5 écrans**, écrite à la main. Le camp de base est au
+  centre, deux camps avancés sont dans les coins, au plus loin.
+- **Des gemmes** dont la valeur double à chaque écran d'éloignement du camp
+  de base : 1, 2, 4, 8. Elles s'ajoutent au butin porté, affiché en haut à
+  droite.
+- **Des ennemis qui poursuivent**, plus lents que le joueur, mais plus
+  nombreux et plus rapides à mesure qu'on s'éloigne. Aucun près du camp.
+- **Trois cœurs.** Mourir fait perdre tout le butin porté et ramène au camp
+  de base.
+- **Les feux de camp** mettent le butin porté à l'abri dans la banque et
+  rendent les cœurs. Rentrer au camp de base termine l'expédition : les
+  gemmes réapparaissent partout.
+- **La banque** est conservée d'une partie à l'autre, dans le navigateur.
+- **Une mini-carte** en haut à droite : zones vues, camps, position.
 
-Les graphismes sont des rectangles de couleur, en attendant les vrais.
+Les graphismes sont des formes de couleur, en attendant les vrais. Il n'y a
+pas encore d'attaque : on esquive.
 
 Ne sont **pas** implémentés, volontairement : la génération semi-procédurale,
-les camps, l'XP, le loot, la progression permanente, les ennemis, le combat.
+l'XP, le combat, les dépenses de la banque, la progression permanente.
 Chaque système sera validé avant d'ajouter le suivant.
+
+Tous les chiffres d'équilibrage sont regroupés en bas de `src/config.js`.
 
 ## Sur iPhone
 
@@ -68,9 +81,12 @@ Des scripts classiques, sans module ni compilation, chargés dans l'ordre par
 ```
 index.html           la page, le canvas et le joystick
 src/config.js        les constantes qui définissent la forme du monde
+src/physics.js       collisions entre corps et murs
 src/zones.js         les zones, la carte du monde et la ceinture de murs
+src/enemies.js       les ennemis : des fiches qui combinent des comportements
+src/save.js          la progression permanente (la banque)
 src/input.js         clavier et joystick, réduits à une direction cardinale
-src/world.js         l'état du jeu et ses règles : déplacement, collisions, transitions
+src/world.js         l'expédition et ses règles : gemmes, coups, camps, transitions
 src/render.js        tout ce qui dessine, et rien d'autre
 src/main.js          la boucle de jeu
 tools/serve.pl       serveur local pour les tests
