@@ -24,7 +24,7 @@ const Enemies = (() => {
   };
 
   const TYPES = {
-    chaser: { kind: "chaser", size: 10, damage: 1, move: "chase" },
+    chaser: { kind: "chaser", size: 10, hp: 1, damage: 1, move: "chase" },
   };
 
   // Durée maximale d'un contournement : au-delà, l'ennemi reprend sa
@@ -39,9 +39,12 @@ const Enemies = (() => {
       x: at.x,
       y: at.y,
       size: t.size,
+      hp: t.hp + Math.floor(distance / Config.ENEMY_HP_EVERY),
       damage: t.damage,
       speed: Config.ENEMY_SPEED + Config.ENEMY_SPEED_PER_DISTANCE * distance,
       wake: Config.ENEMY_WAKE,
+      // Étourdi après un coup : immobile et inoffensif.
+      stun: 0,
       // Contournement en cours : la direction qui était bloquée, celle qu'on
       // longe, et le temps restant.
       detour: 0,
@@ -60,7 +63,26 @@ const Enemies = (() => {
     return Physics.moveAxis(e, dir.x ? "x" : "y", (dir.x || dir.y) * dist, solids);
   }
 
+  // Un ennemi qui peut faire mal : réveillé et pas étourdi.
+  function harmful(e) {
+    return e.wake <= 0 && e.stun <= 0;
+  }
+
+  // Encaisse un coup venu de `dir` et renvoie true s'il en meurt.
+  function hit(e, dir, solids) {
+    e.hp -= 1;
+    e.stun = Config.ENEMY_STUN;
+    e.wake = 0;
+    e.detour = 0;
+    Physics.moveAxis(e, dir.x ? "x" : "y", (dir.x || dir.y) * Config.ENEMY_KNOCKBACK, solids);
+    return e.hp <= 0;
+  }
+
   function step(e, player, dt, solids) {
+    if (e.stun > 0) {
+      e.stun -= dt;
+      return;
+    }
     if (e.wake > 0) {
       e.wake -= dt;
       return;
@@ -94,5 +116,5 @@ const Enemies = (() => {
     }
   }
 
-  return { spawn, step };
+  return { spawn, step, hit, harmful };
 })();

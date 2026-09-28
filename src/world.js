@@ -15,7 +15,11 @@
 // - s'approcher d'un feu de camp met le butin porté à l'abri dans la banque
 //   (Save) et rend tous les cœurs ;
 // - mourir fait perdre tout le butin porté et ramène au camp de base ;
-// - rentrer au camp de base termine l'expédition : les gemmes réapparaissent.
+// - rentrer au camp de base termine l'expédition : les gemmes et les ennemis
+//   réapparaissent ;
+// - un ennemi tué lâche une gemme de la valeur de la zone, et reste mort
+//   jusqu'à la fin de l'expédition, pour qu'on ne puisse pas en faire
+//   réapparaître en repassant une porte.
 
 const World = (() => {
   const state = {
@@ -35,16 +39,23 @@ const World = (() => {
       hp: Config.PLAYER_HP,
       maxHp: Config.PLAYER_HP,
       invuln: 0,
-      // Dernière direction non nulle : l'ancrage de l'animation et, plus
-      // tard, de la direction des attaques.
+      // Dernière direction non nulle : c'est là que frappe l'épée.
       facing: { x: 0, y: 1 },
+      // Temps restant du coup en cours, et avant de pouvoir refrapper.
+      attack: 0,
+      attackCooldown: 0,
     },
+    // La zone que frappe le coup en cours, ou null : {x, y, w, h}.
+    swing: null,
     // L'expédition en cours : tout ce qui meurt avec le joueur.
     run: {
       carried: 0,
       // Gemmes déjà ramassées, "x,y,index", pour qu'une zone quittée puis
       // retrouvée ne les rende pas deux fois.
       taken: new Set(),
+      // Ennemis tués par zone, "x,y" -> nombre : une zone retrouvée en
+      // aligne d'autant moins.
+      killed: new Map(),
     },
     // Zones déjà vues, pour la mini-carte. Survit à la mort : on se souvient
     // du chemin.
@@ -66,8 +77,12 @@ const World = (() => {
     const p = state.player;
     state.run.carried = 0;
     state.run.taken.clear();
+    state.run.killed.clear();
     p.hp = p.maxHp;
     p.invuln = 0;
+    p.attack = 0;
+    p.attackCooldown = 0;
+    state.swing = null;
     p.x = Config.ZONE_W / 2;
     p.y = Config.ZONE_H / 2 + 56;
     state.phase = "play";
@@ -94,7 +109,8 @@ const World = (() => {
       .filter((g) => !state.run.taken.has(g.id));
 
     const table = Config.ENEMIES_BY_DISTANCE;
-    const count = zone.camp ? 0 : table[Math.min(distance, table.length - 1)];
+    const planned = zone.camp ? 0 : table[Math.min(distance, table.length - 1)];
+    const count = Math.max(0, planned - (state.run.killed.get(`${cx},${cy}`) || 0));
     const p = state.player;
     state.enemies = zone.spawns
       .filter((at) => Math.hypot(at.x - p.x, at.y - p.y) >= Config.SPAWN_SAFE_DISTANCE)
@@ -107,7 +123,7 @@ const World = (() => {
     return Config.GEM_BASE * 2 ** Math.max(0, distance - 1);
   }
 
-  function step(dt, dir) {
+  function step(dt, dir, attack) {
     tickMessages(dt);
 
     if (state.phase === "dead") {
@@ -118,21 +134,65 @@ const World = (() => {
 
     const p = state.player;
     p.invuln = Math.max(0, p.invuln - dt);
-    if (dir.x || dir.y) p.facing = dir;
-    const dist = Config.PLAYER_SPEED * dt;
-    if (dir.x) Physics.moveAxis(p, "x", dir.x * dist, state.solids);
-    if (dir.y) Physics.moveAxis(p, "y", dir.y * dist, state.solids);
+    p.attackCooldown = Math.max(0, p.attackCooldown - dt);
+
+    if (attack && p.attackCooldown <= 0) startSwing();
+    if (p.attack > 0) {
+      // Le joueur est planté le temps du coup, comme dans Zelda : il peut
+      // viser, pas frapper en courant.
+      p.attack -= dt;
+      strike();
+      if (p.attack <= 0) state.swing = null;
+    } else {
+      if (dir.x || dir.y) p.facing = dir;
+      const dist = Config.PLAYER_SPEED * dt;
+      if (dir.x) Physics.moveAxis(p, "x", dir.x * dist, state.solids);
+      if (dir.y) Physics.moveAxis(p, "y", dir.y * dist, state.solids);
+    }
 
     pickUpGems();
     restAtFire();
 
     for (const e of state.enemies) {
       Enemies.step(e, p, dt, state.solids);
-      if (p.invuln <= 0 && Physics.overlapsBody(p, e)) hurt(e);
+      if (p.invuln <= 0 && Enemies.harmful(e) && Physics.overlapsBody(p, e)) hurt(e);
       if (state.phase === "dead") return;
     }
 
     changeZoneIfNeeded();
+  }
+
+  function startSwing() {
+    const p = state.player;
+    p.attack = Config.ATTACK_TIME;
+    p.attackCooldown = Config.ATTACK_COOLDOWN;
+
+    // La zone frappée, devant le joueur : ATTACK_REACH dans la direction où il
+    // regarde, ATTACK_WIDTH en travers.
+    const f = p.facing;
+    const reach = Config.ATTACK_REACH, width = Config.ATTACK_WIDTH;
+    const cx = p.x + f.x * (p.size / 2 + reach / 2);
+    const cy = p.y + f.y * (p.size / 2 + reach / 2);
+    const w = f.x ? reach : width;
+    const h = f.x ? width : reach;
+    state.swing = { kind: "sword", x: cx - w / 2, y: cy - h / 2, w, h, dir: { ...f }, hit: new Set() };
+  }
+
+  // Frappe tout ce qui est dans la zone du coup, une seule fois par coup : un
+  // ennemi qui y reste pendant tout le mouvement ne perd qu'un point de vie.
+  function strike() {
+    const s = state.swing;
+    const key = `${state.coords.x},${state.coords.y}`;
+    state.enemies = state.enemies.filter((e) => {
+      if (s.hit.has(e) || !Physics.overlapsRect(e, s)) return true;
+      s.hit.add(e);
+      if (!Enemies.hit(e, s.dir, state.solids)) return true;
+
+      state.run.killed.set(key, (state.run.killed.get(key) || 0) + 1);
+      state.gems.push({ kind: "gem", id: null, x: e.x, y: e.y,
+                        size: Config.GEM_SIZE, value: gemValue(state.distance) });
+      return false;
+    });
   }
 
   function pickUpGems() {
@@ -140,7 +200,9 @@ const World = (() => {
     state.gems = state.gems.filter((g) => {
       if (!Physics.overlapsBody(p, g)) return true;
       state.run.carried += g.value;
-      state.run.taken.add(g.id);
+      // Les gemmes lâchées par un ennemi n'ont pas d'identifiant : elles ne
+      // réapparaîtraient de toute façon pas.
+      if (g.id) state.run.taken.add(g.id);
       state.popups.push({ x: g.x, y: g.y, text: `+${g.value}`, time: 0.8 });
       return false;
     });
@@ -171,9 +233,10 @@ const World = (() => {
 
     // Au camp de base, l'expédition est terminée : le monde se remplit de
     // nouveau.
-    if (state.zone.base && state.run.taken.size > 0) {
+    if (state.zone.base && (state.run.taken.size > 0 || state.run.killed.size > 0)) {
       state.run.taken.clear();
-      if (carried === 0) showBanner("Nouvelle expédition", "les gemmes sont revenues");
+      state.run.killed.clear();
+      if (carried === 0) showBanner("Nouvelle expédition", "le monde s'est repeuplé");
     }
   }
 

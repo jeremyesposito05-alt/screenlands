@@ -33,6 +33,10 @@ avant d'investir dans les graphismes et la génération.
   droite.
 - **Des ennemis qui poursuivent**, plus lents que le joueur, mais plus
   nombreux et plus rapides à mesure qu'on s'éloigne. Aucun près du camp.
+- **Une épée**, qui frappe devant soi. Le joueur s'arrête le temps du coup.
+  Un ennemi touché est repoussé et étourdi ; tué, il lâche une gemme de la
+  valeur de la zone, et reste mort jusqu'à la fin de l'expédition. Au-delà
+  de trois écrans, les ennemis encaissent deux coups.
 - **Trois cœurs.** Mourir fait perdre tout le butin porté et ramène au camp
   de base.
 - **Les feux de camp** mettent le butin porté à l'abri dans la banque et
@@ -45,7 +49,7 @@ Les graphismes sont des formes de couleur, en attendant les vrais. Il n'y a
 pas encore d'attaque : on esquive.
 
 Ne sont **pas** implémentés, volontairement : la génération semi-procédurale,
-l'XP, le combat, les dépenses de la banque, la progression permanente.
+l'XP, les dépenses de la banque, la progression permanente.
 Chaque système sera validé avant d'ajouter le suivant.
 
 Tous les chiffres d'équilibrage sont regroupés en bas de `src/config.js`.
@@ -56,13 +60,15 @@ Ouvrir le lien dans Safari, puis `Partager > Sur l'écran d'accueil`. Lancé
 depuis l'icône, le jeu s'ouvre en plein écran, sans la barre de Safari.
 
 On pose le doigt n'importe où : un joystick apparaît sous le doigt, et le
-joueur part dans la direction où on le fait glisser.
+joueur part dans la direction où on le fait glisser. Le bouton en bas à
+droite donne un coup d'épée : un pouce sur le joystick, l'autre sur le bouton.
 
 ## Sur PC
 
 Double-cliquer sur `index.html` suffit. Flèches directionnelles, ou ZQSD sur
 clavier français et WASD sur clavier anglais : les touches sont lues par
-position physique, donc les deux marchent.
+position physique, donc les deux marchent. Espace, J ou Entrée pour
+frapper.
 
 Pour tester dans les conditions du site publié, `tools/serve.pl` est un petit
 serveur local en Perl :

@@ -17,6 +17,10 @@ const Render = (() => {
     rock: "#4f5463",
     player: "#f2c44d",
     chaser: "#d8574a",
+    // Un ennemi à plusieurs points de vie porte un liseré plus sombre.
+    tough: "#7a2620",
+    hitFlash: "#ffffff",
+    sword: "#e8edf5",
     gem: "#5fd4e8",
     fire: "#f08a3c",
     fireCore: "#ffd27a",
@@ -62,6 +66,7 @@ const Render = (() => {
     for (const g of state.gems) drawGem(g.x, g.y, g.size);
     for (const e of state.enemies) drawEnemy(e);
     if (state.phase !== "dead") drawPlayer(player);
+    if (state.swing) drawSwing(state.swing, player);
 
     for (const pop of state.popups) {
       text(pop.text, pop.x, pop.y - 8, STYLE.gem, "center");
@@ -100,11 +105,35 @@ const Render = (() => {
 
   function drawEnemy(e) {
     const h = e.size / 2;
+    const x = Math.round(e.x - h), y = Math.round(e.y - h);
     // Endormi à l'entrée de la zone : dessiné terne.
     ctx.globalAlpha = e.wake > 0 ? 0.45 : 1;
-    ctx.fillStyle = STYLE.chaser;
-    ctx.fillRect(Math.round(e.x - h), Math.round(e.y - h), e.size, e.size);
+    // Touché : il clignote en blanc pendant qu'il est étourdi.
+    const flash = e.stun > 0 && Math.floor(clock * 20) % 2 === 0;
+    ctx.fillStyle = flash ? STYLE.hitFlash : STYLE[e.kind];
+    ctx.fillRect(x, y, e.size, e.size);
+    if (e.hp > 1 && !flash) {
+      ctx.strokeStyle = STYLE.tough;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 1, y + 1, e.size - 2, e.size - 2);
+    }
     ctx.globalAlpha = 1;
+  }
+
+  // L'épée : une lame qui sort du joueur dans la direction où il regarde.
+  // La zone réellement frappée (state.swing) est un peu plus large que la
+  // lame, pour pardonner un coup légèrement décalé.
+  function drawSwing(s, p) {
+    const f = s.dir;
+    const len = Config.ATTACK_REACH;
+    const thick = 3;
+    const bx = p.x + f.x * (p.size / 2);
+    const by = p.y + f.y * (p.size / 2);
+    ctx.fillStyle = STYLE.sword;
+    if (f.x) ctx.fillRect(f.x > 0 ? bx : bx - len, by - thick / 2, len, thick);
+    else ctx.fillRect(bx - thick / 2, f.y > 0 ? by : by - len, thick, len);
+    ctx.fillStyle = "rgba(232, 237, 245, 0.18)";
+    ctx.fillRect(s.x, s.y, s.w, s.h);
   }
 
   function drawPlayer(p) {

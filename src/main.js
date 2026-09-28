@@ -9,7 +9,7 @@
 
 (() => {
   const canvas = document.getElementById("game");
-  Input.init(document.getElementById("joystick"));
+  Input.init(document.getElementById("joystick"), document.getElementById("attack"));
   Render.init(canvas);
   World.newExpedition();
 
@@ -24,7 +24,7 @@
     last = now;
     acc += dt;
     while (acc >= Config.STEP) {
-      World.step(Config.STEP, Input.direction());
+      World.step(Config.STEP, Input.direction(), Input.takeAttack());
       acc -= Config.STEP;
     }
     Render.draw(World.state, dt);
@@ -44,5 +44,5 @@
   fit();
 
   // Accès pour les tests et le débogage depuis la console.
-  window.Screenlands = { World, Input, Config, Save, ZoneRegistry };
+  window.Screenlands = { World, Input, Render, Config, Save, ZoneRegistry };
 })();

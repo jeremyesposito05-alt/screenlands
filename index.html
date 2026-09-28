@@ -59,6 +59,24 @@
       box-sizing: border-box;
     }
     #joystick[hidden] { display: none; }
+    #attack {
+      position: fixed;
+      right: calc(env(safe-area-inset-right) + 22px);
+      bottom: calc(env(safe-area-inset-bottom) + 44px);
+      width: 76px;
+      height: 76px;
+      padding: 20px;
+      border-radius: 50%;
+      border: 2px solid rgba(242, 196, 77, 0.55);
+      background: rgba(242, 196, 77, 0.12);
+      color: rgba(242, 196, 77, 0.9);
+      touch-action: none;
+      cursor: pointer;
+      box-sizing: border-box;
+    }
+    #attack.pressed { background: rgba(242, 196, 77, 0.35); }
+    #attack svg { display: block; width: 100%; height: 100%; }
+    #attack:focus { outline: none; }
     #joystick .knob {
       position: absolute;
       left: 50%;
@@ -73,6 +91,15 @@
 <body>
   <div id="stage"><canvas id="game"></canvas></div>
   <div id="joystick" hidden><div class="knob"></div></div>
+  <!-- Le bouton d'attaque, sous le pouce droit ; le joystick apparaît
+       partout ailleurs. -->
+  <button id="attack" type="button" aria-label="Attaquer">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M19 3 L21 5 L10 16 L8 14 Z" fill="currentColor"/>
+      <path d="M6 12 L12 18 L10.5 19.5 L4.5 13.5 Z" fill="currentColor"/>
+      <path d="M7.5 16.5 L4 20" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+    </svg>
+  </button>
 
   <!-- Scripts classiques, sans module ni outil de compilation : le jeu
        s'ouvre aussi bien en double-cliquant sur ce fichier que depuis

@@ -40,6 +40,15 @@ const Config = Object.freeze({
   HURT_INVULN: 1.2,
   HURT_KNOCKBACK: 16,
 
+  // --- Attaque ---
+  // Un coup d'épée devant soi : le joueur s'arrête le temps du coup, puis
+  // doit attendre un peu avant le suivant.
+  ATTACK_TIME: 0.18,
+  ATTACK_COOLDOWN: 0.32,
+  // La zone touchée : ATTACK_REACH devant le joueur, ATTACK_WIDTH de large.
+  ATTACK_REACH: 14,
+  ATTACK_WIDTH: 18,
+
   // --- Stop ou encore ---
   // Une gemme vaut GEM_BASE x 2^(distance - 1) : 1, 2, 4, 8... La distance
   // est comptée en écrans depuis le camp de base.
@@ -60,6 +69,12 @@ const Config = Object.freeze({
   ENEMY_WAKE: 0.6,
   // Un ennemi n'apparaît jamais plus près que ça du joueur qui entre.
   SPAWN_SAFE_DISTANCE: 90,
+  // Un point de vie de plus tous les ENEMY_HP_EVERY écrans de distance.
+  ENEMY_HP_EVERY: 3,
+  // Touché, un ennemi est repoussé et reste étourdi, donc inoffensif, un
+  // court instant.
+  ENEMY_KNOCKBACK: 20,
+  ENEMY_STUN: 0.4,
 
   // --- Messages ---
   BANNER_TIME: 2.2,
