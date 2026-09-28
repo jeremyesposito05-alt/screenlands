@@ -15,15 +15,15 @@
 // - s'approcher d'un feu de camp met le butin porté à l'abri dans la banque
 //   (Save) et rend tous les cœurs ;
 // - mourir fait perdre tout le butin porté et ramène au camp de base ;
-// - rentrer au camp de base termine l'expédition : les gemmes et les ennemis
-//   réapparaissent ;
+// - rentrer au camp de base termine l'expédition : une nouvelle carte est
+//   tirée, comme après la mort ;
 // - un ennemi tué lâche une gemme de la valeur de la zone, et reste mort
 //   jusqu'à la fin de l'expédition, pour qu'on ne puisse pas en faire
 //   réapparaître en repassant une porte.
 
 const World = (() => {
   const state = {
-    coords: { ...ZoneRegistry.base },
+    coords: { x: 0, y: 0 },
     distance: 0,
     zone: null,
     // Murs et obstacles de la zone chargée : tout ce qui arrête un corps.
@@ -57,8 +57,7 @@ const World = (() => {
       // aligne d'autant moins.
       killed: new Map(),
     },
-    // Zones déjà vues, pour la mini-carte. Survit à la mort : on se souvient
-    // du chemin.
+    // Zones déjà vues de la carte en cours, pour la mini-carte.
     visited: new Set(),
     // "play", ou "dead" pendant la pause qui suit la mort.
     phase: "play",
@@ -72,12 +71,20 @@ const World = (() => {
     atFire: false,
   };
 
-  // Une nouvelle expédition, au camp de base : au lancement et après la mort.
-  function newExpedition() {
-    const p = state.player;
-    state.run.carried = 0;
+  // Tire une nouvelle carte et oublie tout ce qui concernait l'ancienne.
+  function newMap(seed) {
+    ZoneRegistry.load(Generator.generate(seed ?? Generator.freshSeed()));
     state.run.taken.clear();
     state.run.killed.clear();
+    state.visited.clear();
+  }
+
+  // Une nouvelle expédition, au camp de base : au lancement et après la mort.
+  // `seed` sert à rejouer une carte précise ; sans elle, la carte est neuve.
+  function newExpedition(seed) {
+    const p = state.player;
+    newMap(seed);
+    state.run.carried = 0;
     p.hp = p.maxHp;
     p.invuln = 0;
     p.attack = 0;
@@ -98,6 +105,7 @@ const World = (() => {
     state.coords = { x: cx, y: cy };
     state.distance = distance;
     state.solids = [...borderWalls(ZoneRegistry.exits(cx, cy)), ...zone.obstacles];
+    state.nav = Nav.build(state.solids, Enemies.SIZE);
     state.visited.add(`${cx},${cy}`);
     state.atFire = false;
     state.popups = [];
@@ -109,14 +117,20 @@ const World = (() => {
       .filter((g) => !state.run.taken.has(g.id));
 
     const table = Config.ENEMIES_BY_DISTANCE;
+    // La composition de la zone est tirée avec sa propre graine : la même à
+    // chaque retour. Les ennemis déjà tués sont retirés du début de la liste,
+    // Traqueur compris.
     const planned = zone.camp ? 0 : table[Math.min(distance, table.length - 1)];
-    const count = Math.max(0, planned - (state.run.killed.get(`${cx},${cy}`) || 0));
+    const rng = makeRandom(deriveSeed(ZoneRegistry.seed, cx, cy));
+    const roster = Enemies.roster(planned, distance, rng)
+      .slice(state.run.killed.get(`${cx},${cy}`) || 0);
     const p = state.player;
-    state.enemies = zone.spawns
+    const spots = zone.spawns
       .filter((at) => Math.hypot(at.x - p.x, at.y - p.y) >= Config.SPAWN_SAFE_DISTANCE)
-      .sort((a, b) => Math.hypot(b.x - p.x, b.y - p.y) - Math.hypot(a.x - p.x, a.y - p.y))
-      .slice(0, count)
-      .map((at) => Enemies.spawn("chaser", at, distance));
+      .sort((a, b) => Math.hypot(b.x - p.x, b.y - p.y) - Math.hypot(a.x - p.x, a.y - p.y));
+    state.enemies = roster
+      .slice(0, spots.length)
+      .map((type, i) => Enemies.spawn(type, spots[i], distance));
   }
 
   function gemValue(distance) {
@@ -154,7 +168,7 @@ const World = (() => {
     restAtFire();
 
     for (const e of state.enemies) {
-      Enemies.step(e, p, dt, state.solids);
+      Enemies.step(e, p, state.enemies, dt, state.nav, state.solids);
       if (p.invuln <= 0 && Enemies.harmful(e) && Physics.overlapsBody(p, e)) hurt(e);
       if (state.phase === "dead") return;
     }
@@ -231,12 +245,14 @@ const World = (() => {
       showBanner("Repos", "cœurs rendus");
     }
 
-    // Au camp de base, l'expédition est terminée : le monde se remplit de
-    // nouveau.
+    // Au camp de base, l'expédition est terminée dès qu'on a pris quelque
+    // chose au monde : la carte change. Le joueur reste où il est, au coin du
+    // feu, et repart sur un chemin neuf.
     if (state.zone.base && (state.run.taken.size > 0 || state.run.killed.size > 0)) {
-      state.run.taken.clear();
-      state.run.killed.clear();
-      if (carried === 0) showBanner("Nouvelle expédition", "le monde s'est repeuplé");
+      newMap();
+      enterZone(ZoneRegistry.base.x, ZoneRegistry.base.y);
+      state.atFire = true;
+      if (carried === 0) showBanner("Nouvelle expédition", "la carte a changé");
     }
   }
 

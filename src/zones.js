@@ -13,21 +13,32 @@
 // fait ressortir le joueur du côté opposé en gardant son autre coordonnée,
 // ce qui ne tombe dans une porte que si les portes se font face.
 //
+// Règle pour qui dessine une zone : depuis chacune des quatre portes, on doit
+// pouvoir atteindre les trois autres et toutes les gemmes. Le test de
+// génération le vérifie pour chaque zone.
+//
 // Chaque élément porte un `kind` : c'est lui que le rendu lira pour choisir
 // un sprite quand les graphismes remplaceront les rectangles.
 
-// Un bloc plein de 2 x 2 tuiles, posé par son centre.
-function obstacle(cx, cy) {
-  const s = Config.TILE * 2;
-  return { kind: "rock", x: cx - s / 2, y: cy - s / 2, w: s, h: s };
+// Un bloc plein, posé par son centre ; 2 x 2 tuiles par défaut.
+function obstacle(cx, cy, size = Config.TILE * 2) {
+  return { kind: "rock", x: cx - size / 2, y: cy - size / 2, w: size, h: size };
+}
+
+// Un mur intérieur rectangulaire, posé par son coin.
+function block(x, y, w, h) {
+  return { kind: "rock", x, y, w, h };
 }
 
 const p = (x, y) => ({ x, y });
 
+// `minDistance` : une zone n'apparaît pas plus près du camp de base, pour
+// réserver les décors les plus piégeux au loin.
 const LAYOUTS = {
   clearing: {
     name: "Clairière",
     ground: "#161d1b",
+    minDistance: 1,
     obstacles: [obstacle(48, 96), obstacle(144, 320)],
     gems: [p(144, 112), p(48, 300), p(96, 250)],
     spawns: [p(48, 200), p(144, 200), p(96, 60), p(96, 360)],
@@ -35,6 +46,7 @@ const LAYOUTS = {
   rocks: {
     name: "Rochers",
     ground: "#1d1c1f",
+    minDistance: 1,
     obstacles: [
       obstacle(48, 80), obstacle(144, 80), obstacle(96, 144),
       obstacle(48, 336), obstacle(144, 336),
@@ -45,6 +57,7 @@ const LAYOUTS = {
   corridor: {
     name: "Couloir",
     ground: "#141821",
+    minDistance: 1,
     obstacles: [
       obstacle(64, 128), obstacle(96, 128), obstacle(128, 128),
       obstacle(64, 288), obstacle(96, 288), obstacle(128, 288),
@@ -55,12 +68,53 @@ const LAYOUTS = {
   pillars: {
     name: "Piliers",
     ground: "#211b19",
+    minDistance: 1,
     obstacles: [
       obstacle(48, 128), obstacle(144, 128),
       obstacle(48, 288), obstacle(144, 288),
     ],
     gems: [p(96, 128), p(96, 288), p(48, 208)],
     spawns: [p(144, 208), p(48, 60), p(144, 360), p(40, 360)],
+  },
+  // Deux murs en travers, chacun percé d'un seul passage au centre : pour
+  // traverser de haut en bas, on ne peut pas éviter ce qui s'y trouve. Le
+  // couloir des portes latérales, entre les deux, reste libre.
+  narrows: {
+    name: "Étranglement",
+    ground: "#1a1a22",
+    minDistance: 2,
+    obstacles: [
+      block(16, 128, 64, 24), block(112, 128, 64, 24),
+      block(16, 264, 64, 24), block(112, 264, 64, 24),
+    ],
+    gems: [p(40, 90), p(152, 330), p(96, 208)],
+    spawns: [p(40, 60), p(152, 60), p(40, 360), p(152, 360)],
+  },
+  // Un bloc central et quatre autour : on circule par les bords.
+  crossing: {
+    name: "Croisée",
+    ground: "#1b1e1a",
+    minDistance: 2,
+    obstacles: [
+      obstacle(56, 150), obstacle(136, 150), obstacle(96, 208),
+      obstacle(56, 266), obstacle(136, 266),
+    ],
+    gems: [p(96, 150), p(96, 266), p(28, 208)],
+    spawns: [p(40, 60), p(152, 60), p(40, 360), p(152, 360)],
+  },
+  // Des pierres d'une tuile éparpillées : beaucoup de recoins pour se faire
+  // coincer.
+  ruins: {
+    name: "Ruines",
+    ground: "#1f1b20",
+    minDistance: 3,
+    obstacles: [
+      obstacle(40, 72, 16), obstacle(120, 88, 16), obstacle(72, 152, 16),
+      obstacle(152, 176, 16), obstacle(40, 248, 16), obstacle(104, 280, 16),
+      obstacle(152, 336, 16), obstacle(64, 360, 16),
+    ],
+    gems: [p(40, 120), p(152, 240), p(96, 208)],
+    spawns: [p(96, 60), p(40, 300), p(152, 120), p(120, 380)],
   },
   // Un camp : pas d'obstacle, pas d'ennemi, un feu au centre. S'en approcher
   // met le butin à l'abri et soigne.
@@ -77,7 +131,7 @@ const LAYOUTS = {
     name: "Camp de base",
     ground: "#221c14",
     camp: true,
-    // Y rentrer termine l'expédition : les gemmes réapparaissent partout.
+    // Y rentrer termine l'expédition : une nouvelle carte est tirée.
     base: true,
     obstacles: [],
     gems: [],
@@ -86,52 +140,40 @@ const LAYOUTS = {
   },
 };
 
-// La carte : quelle zone se trouve à quelles coordonnées.
-//
-// Écrite à la main pour le prototype : une grille 5 x 5, le camp de base au
-// centre, deux camps avancés dans les coins, au plus loin. C'est le point
-// d'entrée unique de la génération à venir : un tirage de zones prédéfinies
-// remplacera ce tableau sans que World ait à changer, tant que ces méthodes
-// répondent.
-const ZoneRegistry = (() => {
-  const GRID = [
-    ["camp",     "rocks",    "corridor", "pillars",  "clearing"],
-    ["pillars",  "clearing", "rocks",    "corridor", "rocks"],
-    ["corridor", "rocks",    "base",     "clearing", "pillars"],
-    ["clearing", "corridor", "pillars",  "rocks",    "corridor"],
-    ["rocks",    "pillars",  "clearing", "corridor", "camp"],
-  ];
-  const BASE = { x: 2, y: 2 };
+// Les zones que le générateur peut tirer pour un écran ordinaire.
+const WILD_LAYOUTS = Object.keys(LAYOUTS).filter((k) => !LAYOUTS[k].camp);
 
-  function has(cx, cy) {
-    return cy >= 0 && cy < GRID.length && cx >= 0 && cx < GRID[cy].length;
-  }
+// La carte : quelle zone se trouve à quelles coordonnées, et quelles portes
+// la relient à ses voisines.
+//
+// Elle ne fabrique rien : elle sert la carte que Generator lui a confiée par
+// load(). World ne connaît de la carte que ces méthodes, et ne sait donc pas
+// si elle a été écrite à la main ou tirée au sort.
+const ZoneRegistry = (() => {
+  let map = null;
+  const key = (cx, cy) => `${cx},${cy}`;
+  const cell = (cx, cy) => map.cells.get(key(cx, cy));
 
   return {
-    base: BASE,
-    width: GRID[0].length,
-    height: GRID.length,
-    has,
-    get(cx, cy) {
-      return LAYOUTS[GRID[cy][cx]];
-    },
-    // Distance en écrans depuis le camp de base : c'est elle qui fixe la
-    // valeur des gemmes et le nombre d'ennemis.
-    distance(cx, cy) {
-      return Math.abs(cx - BASE.x) + Math.abs(cy - BASE.y);
-    },
-    // Les côtés de la zone qui donnent sur une voisine, et ont donc une porte.
-    exits(cx, cy) {
-      return {
-        left: has(cx - 1, cy), right: has(cx + 1, cy),
-        up: has(cx, cy - 1), down: has(cx, cy + 1),
-      };
-    },
+    load(m) { map = m; },
+    get seed() { return map.seed; },
+    get base() { return map.base; },
+    get width() { return map.size; },
+    get height() { return map.size; },
+    has(cx, cy) { return map.cells.has(key(cx, cy)); },
+    get(cx, cy) { return LAYOUTS[cell(cx, cy).layout]; },
+    // Nombre d'écrans à traverser depuis le camp de base, par le plus court
+    // chemin : c'est lui qui fixe la valeur des gemmes et le danger.
+    distance(cx, cy) { return cell(cx, cy).distance; },
+    // Les côtés de la zone qui ont une porte vers une voisine.
+    exits(cx, cy) { return cell(cx, cy).links; },
+    // Tous les écrans, pour la mini-carte.
+    cells() { return map.cells.values(); },
   };
 })();
 
 // Les segments de mur d'une zone : deux par côté, de part et d'autre de la
-// porte, plus un bouchon quand le côté n'a pas de voisine. Ils sont à
+// porte, plus un bouchon quand le côté n'a pas de porte. Ils sont à
 // l'intérieur de l'écran, sur l'anneau de tuiles du bord, pour que le joueur
 // voie où sont les sorties.
 function borderWalls(exits) {

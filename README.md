@@ -22,17 +22,30 @@ le vrai téléphone à chaque modification.
 
 ## État actuel
 
-Le deuxième prototype : la plus petite version jouable du stop ou encore,
-pour savoir si la tension entre « je continue » et « je rentre » fonctionne
-avant d'investir dans les graphismes et la génération.
+Un prototype jouable du stop ou encore, pour savoir si la tension entre
+« je continue » et « je rentre » fonctionne avant d'investir dans les
+graphismes.
 
-- **Une carte de 5 x 5 écrans**, écrite à la main. Le camp de base est au
-  centre, deux camps avancés sont dans les coins, au plus loin.
+- **Une nouvelle carte à chaque expédition.** Environ 26 écrans poussent
+  depuis le camp de base, au centre d'une grille de 7 x 7, reliés par des
+  portes comme un labyrinthe avec quelques boucles. Deux camps avancés : un
+  tout au bout, un à mi-chemin. Sept décors, dont certains réservés au loin.
 - **Des gemmes** dont la valeur double à chaque écran d'éloignement du camp
-  de base : 1, 2, 4, 8. Elles s'ajoutent au butin porté, affiché en haut à
-  droite.
-- **Des ennemis qui poursuivent**, plus lents que le joueur, mais plus
-  nombreux et plus rapides à mesure qu'on s'éloigne. Aucun près du camp.
+  de base, compté par le plus court chemin : 1, 2, 4, 8... Elles s'ajoutent
+  au butin porté, affiché en haut à droite.
+- **Quatre ennemis inspirés des fantômes de Pac-Man**, qui se déplacent tous
+  de la même façon mais ne visent pas le même point :
+  - le **Traqueur** (rouge) vise le joueur ;
+  - l'**Embusqueur** (rose, dès 2 écrans) vise trois tuiles devant lui, pour
+    lui couper la route, puis charge ;
+  - le **Craintif** (orange, dès 3 écrans) fonce de loin mais recule vers son
+    coin quand il est trop près ;
+  - le **Tenailleur** (bleu, dès 4 écrans) se place à l'opposé du Traqueur,
+    pour prendre le joueur en tenaille, puis charge.
+
+  Ils trouvent leur chemin autour des obstacles, sont plus lents que le
+  joueur, et plus nombreux et plus rapides à mesure qu'on s'éloigne. Aucun
+  près des camps.
 - **Une épée**, qui frappe devant soi. Le joueur s'arrête le temps du coup.
   Un ennemi touché est repoussé et étourdi ; tué, il lâche une gemme de la
   valeur de la zone, et reste mort jusqu'à la fin de l'expédition. Au-delà
@@ -40,16 +53,16 @@ avant d'investir dans les graphismes et la génération.
 - **Trois cœurs.** Mourir fait perdre tout le butin porté et ramène au camp
   de base.
 - **Les feux de camp** mettent le butin porté à l'abri dans la banque et
-  rendent les cœurs. Rentrer au camp de base termine l'expédition : les
-  gemmes réapparaissent partout.
+  rendent les cœurs. Rentrer au camp de base avec du butin, ou après avoir
+  tué, termine l'expédition : une nouvelle carte est tirée.
 - **La banque** est conservée d'une partie à l'autre, dans le navigateur.
-- **Une mini-carte** en haut à droite : zones vues, camps, position.
+- **Une mini-carte** en haut à droite : écrans visités et leurs portes,
+  écrans entrevus derrière, camps, position.
 
-Les graphismes sont des formes de couleur, en attendant les vrais. Il n'y a
-pas encore d'attaque : on esquive.
+Les graphismes sont des formes de couleur, en attendant les vrais.
 
-Ne sont **pas** implémentés, volontairement : la génération semi-procédurale,
-l'XP, les dépenses de la banque, la progression permanente.
+Ne sont **pas** implémentés, volontairement : l'XP, les dépenses de la
+banque, la progression permanente, le glissement d'écran.
 Chaque système sera validé avant d'ajouter le suivant.
 
 Tous les chiffres d'équilibrage sont regroupés en bas de `src/config.js`.
@@ -88,10 +101,13 @@ Des scripts classiques, sans module ni compilation, chargés dans l'ordre par
 index.html           la page, le canvas et le joystick
 src/config.js        les constantes qui définissent la forme du monde
 src/physics.js       collisions entre corps et murs
-src/zones.js         les zones, la carte du monde et la ceinture de murs
-src/enemies.js       les ennemis : des fiches qui combinent des comportements
+src/random.js        hasard à graine : une même graine redonne la même carte
+src/zones.js         les décors, la carte chargée et la ceinture de murs
+src/generator.js     tire une carte neuve à chaque expédition
+src/nav.js           plus court chemin des ennemis autour des obstacles
+src/enemies.js       les ennemis : des fiches qui choisissent une règle de visée
 src/save.js          la progression permanente (la banque)
-src/input.js         clavier et joystick, réduits à une direction cardinale
+src/input.js         clavier, joystick et bouton d'attaque
 src/world.js         l'expédition et ses règles : gemmes, coups, camps, transitions
 src/render.js        tout ce qui dessine, et rien d'autre
 src/main.js          la boucle de jeu
@@ -114,8 +130,16 @@ autre coordonnée. Ça ne marche que si les portes se font face, d'où la
 ceinture de murs calculée par `borderWalls()` plutôt que dessinée à la main.
 
 **La carte est derrière une seule porte.** `ZoneRegistry` répond à « quelle
-zone se trouve en (x, y) ? ». La génération semi-procédurale le remplacera
-sans que `World` change.
+zone se trouve en (x, y), à quelle distance, avec quelles portes ? ».
+`Generator` lui confie une carte neuve à chaque expédition ; `World` ne sait
+pas d'où elle vient. Le générateur n'invente pas de décor : il assemble des
+décors dessinés à la main, ce qui garde chaque écran jouable à coup sûr.
+
+**Les ennemis ne diffèrent que par leur cible.** Comme les fantômes de
+Pac-Man, tous se déplacent pareil (le plus court chemin, calculé par `Nav`) ;
+chaque type choisit seulement le point qu'il vise. Un nouvel ennemi est une
+fiche de plus dans `Enemies.TYPES`, et une nouvelle manœuvre une règle de
+plus dans `TARGETS`.
 
 **Le rendu est séparé des règles.** `World` ne dessine rien et `Render` ne
 modifie rien. Chaque élément porte un `kind` (`wall`, `rock`, `player`) :

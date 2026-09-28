@@ -49,9 +49,25 @@ const Config = Object.freeze({
   ATTACK_REACH: 14,
   ATTACK_WIDTH: 18,
 
+  // --- Carte ---
+  // Une nouvelle carte à chaque expédition : MAP_ZONES écrans qui poussent
+  // depuis le camp de base, au centre d'une grille de MAP_SIZE x MAP_SIZE.
+  MAP_SIZE: 7,
+  MAP_ZONES: 26,
+  // Chance d'ouvrir une porte de plus entre deux écrans voisins déjà reliés
+  // par un autre chemin : 0 donne un pur labyrinthe, 1 une grille ouverte.
+  MAP_LOOP_CHANCE: 0.22,
+  // Profondeur maximale d'une carte, en écrans depuis le camp de base. Au-delà,
+  // la carte est retirée : la valeur des gemmes double à chaque écran, et un
+  // long couloir la ferait exploser.
+  MAP_MAX_DISTANCE: 9,
+  // Distance minimale, en écrans, d'un camp avancé au camp de base.
+  CAMP_MIN_DISTANCE: 3,
+
   // --- Stop ou encore ---
   // Une gemme vaut GEM_BASE x 2^(distance - 1) : 1, 2, 4, 8... La distance
-  // est comptée en écrans depuis le camp de base.
+  // est le nombre d'écrans à traverser depuis le camp de base, par le plus
+  // court chemin.
   GEM_BASE: 1,
   GEM_SIZE: 8,
   // À quelle distance du feu de camp le butin est mis à l'abri.
@@ -60,7 +76,7 @@ const Config = Object.freeze({
   // --- Ennemis ---
   // Leur nombre par zone, indexé par la distance au camp de base (au-delà,
   // la dernière valeur).
-  ENEMIES_BY_DISTANCE: [0, 1, 1, 2, 3],
+  ENEMIES_BY_DISTANCE: [0, 1, 1, 2, 2, 3, 3, 4],
   // Toujours plus lents que le joueur : on peut fuir, pas flâner.
   ENEMY_SPEED: 42,
   ENEMY_SPEED_PER_DISTANCE: 5,

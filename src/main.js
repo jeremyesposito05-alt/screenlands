@@ -44,5 +44,5 @@
   fit();
 
   // Accès pour les tests et le débogage depuis la console.
-  window.Screenlands = { World, Input, Render, Config, Save, ZoneRegistry };
+  window.Screenlands = { World, Input, Render, Config, Save, ZoneRegistry, Generator, Enemies };
 })();

@@ -16,7 +16,13 @@ const Render = (() => {
     wall: "#2e3342",
     rock: "#4f5463",
     player: "#f2c44d",
+    // Les quatre fantômes, dans les couleurs de Pac-Man.
     chaser: "#d8574a",
+    ambusher: "#e889c0",
+    pincer: "#5f9df0",
+    shy: "#e89a4c",
+    eye: "#f4f6fa",
+    pupil: "#1a1d26",
     // Un ennemi à plusieurs points de vie porte un liseré plus sombre.
     tough: "#7a2620",
     hitFlash: "#ffffff",
@@ -114,8 +120,19 @@ const Render = (() => {
     ctx.fillRect(x, y, e.size, e.size);
     if (e.hp > 1 && !flash) {
       ctx.strokeStyle = STYLE.tough;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x + 1, y + 1, e.size - 2, e.size - 2);
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, e.size - 1, e.size - 1);
+    }
+    // Deux yeux qui regardent où il va, comme les fantômes : c'est ce qui
+    // trahit son intention.
+    if (!flash) {
+      const lx = e.look.x * 1.5, ly = e.look.y * 1.5;
+      for (const ox of [-2.5, 2.5]) {
+        ctx.fillStyle = STYLE.eye;
+        ctx.fillRect(e.x + ox - 1.5, e.y - 3, 3, 3);
+        ctx.fillStyle = STYLE.pupil;
+        ctx.fillRect(e.x + ox - 0.75 + lx * 0.5, e.y - 2.25 + ly * 0.5, 1.5, 1.5);
+      }
     }
     ctx.globalAlpha = 1;
   }
@@ -166,21 +183,37 @@ const Render = (() => {
     text(`banque ${Save.data.bank}`, Config.ZONE_W - 4, y, STYLE.dim, "right");
   }
 
+  // La mini-carte montre ce qu'on sait : les écrans visités et leurs portes,
+  // les écrans entrevus derrière ces portes, et les camps, connus d'avance
+  // puisque ce sont les destinations. Le reste de la carte est à découvrir.
   function drawMinimap(state) {
-    const cell = 4, gap = 1;
-    const w = ZoneRegistry.width, h = ZoneRegistry.height;
-    const ox = Config.ZONE_W - Config.WALL - 2 - w * (cell + gap);
+    const cell = 4, step = 6;
+    const ox = Config.ZONE_W - Config.WALL - 2 - ZoneRegistry.width * step;
     const oy = Config.WALL + 2;
-    for (let cy = 0; cy < h; cy++) {
-      for (let cx = 0; cx < w; cx++) {
-        const here = cx === state.coords.x && cy === state.coords.y;
-        // Les camps sont connus d'avance : ce sont les destinations.
-        const camp = ZoneRegistry.get(cx, cy).camp;
-        const seen = state.visited.has(`${cx},${cy}`);
-        ctx.fillStyle = here ? STYLE.mapHere : camp ? STYLE.mapCamp
-          : seen ? STYLE.mapSeen : STYLE.mapFog;
-        ctx.fillRect(ox + cx * (cell + gap), oy + cy * (cell + gap), cell, cell);
-      }
+    const visited = (x, y) => state.visited.has(`${x},${y}`);
+    const known = (c) => visited(c.x, c.y) || ZoneRegistry.get(c.x, c.y).camp ||
+      (c.links.left && visited(c.x - 1, c.y)) || (c.links.right && visited(c.x + 1, c.y)) ||
+      (c.links.up && visited(c.x, c.y - 1)) || (c.links.down && visited(c.x, c.y + 1));
+
+    ctx.fillStyle = "rgba(8, 10, 14, 0.45)";
+    ctx.fillRect(ox - 2, oy - 2, ZoneRegistry.width * step + 2, ZoneRegistry.height * step + 2);
+
+    for (const c of ZoneRegistry.cells()) {
+      if (!known(c)) continue;
+      const x = ox + c.x * step, y = oy + c.y * step;
+      const here = c.x === state.coords.x && c.y === state.coords.y;
+      const seen = visited(c.x, c.y);
+      ctx.fillStyle = here ? STYLE.mapHere : ZoneRegistry.get(c.x, c.y).camp ? STYLE.mapCamp
+        : seen ? STYLE.mapSeen : STYLE.mapFog;
+      ctx.fillRect(x, y, cell, cell);
+      // Les portes d'un écran visité, vers la droite et vers le bas : chaque
+      // passage n'est dessiné qu'une fois.
+      if (!seen) continue;
+      ctx.fillStyle = STYLE.mapSeen;
+      if (c.links.right) ctx.fillRect(x + cell, y + 1, step - cell, 2);
+      if (c.links.down) ctx.fillRect(x + 1, y + cell, 2, step - cell);
+      if (c.links.left && !visited(c.x - 1, c.y)) ctx.fillRect(x - (step - cell), y + 1, step - cell, 2);
+      if (c.links.up && !visited(c.x, c.y - 1)) ctx.fillRect(x + 1, y - (step - cell), 2, step - cell);
     }
   }
 
