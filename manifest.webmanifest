@@ -1,0 +1,16 @@
+{
+  "name": "Screenlands",
+  "short_name": "Screenlands",
+  "description": "Roguelite d'exploration écran par écran, en 2D vue de dessus.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#0b0d12",
+  "theme_color": "#0b0d12",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

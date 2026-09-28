@@ -18,9 +18,9 @@ config/icon="res://icon.svg"
 ; 12 x 26 tuiles de 16 px = 192 x 416, soit un ratio 9:19.5 (iPhone portrait).
 window/size/viewport_width=192
 window/size/viewport_height=416
-; Fenêtre x3 pour travailler confortablement sur PC.
-window/size/window_width_override=576
-window/size/window_height_override=1248
+; Fenêtre x2 : en x3 (1248 px de haut) elle dépasse l'écran d'un portable.
+window/size/window_width_override=384
+window/size/window_height_override=832
 window/stretch/mode="canvas_items"
 window/stretch/aspect="keep"
 

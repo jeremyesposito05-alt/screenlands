@@ -1,5 +1,9 @@
 # Architecture envisagée
 
+> Ce document décrit le prototype Godot, mis de côté le 28 septembre 2026 au
+> profit de la version HTML à la racine du dépôt. Les idées restent valables :
+> elles ont été transposées telles quelles dans `src/`.
+
 Ce document explique pourquoi le code est découpé comme il l'est, et où
 viendront se brancher les systèmes pas encore écrits. Il est volontairement
 court : il décrit des intentions, pas un plan figé.
