@@ -27,6 +27,11 @@ const Render = (() => {
     tough: "#7a2620",
     hitFlash: "#ffffff",
     sword: "#e8edf5",
+    arrow: "#d9c9a3",
+    boomerang: "#d7a45a",
+    chest: "#7a4f2a",
+    chestLid: "#a36b36",
+    chestLock: "#f2c44d",
     gem: "#5fd4e8",
     fire: "#f08a3c",
     fireCore: "#ffd27a",
@@ -69,10 +74,13 @@ const Render = (() => {
       ctx.fillStyle = STYLE[s.kind];
       ctx.fillRect(s.x, s.y, s.w, s.h);
     }
+    if (state.chest) drawChest(state.chest);
+    for (const d of state.drops) drawItemOnGround(d);
     for (const g of state.gems) drawGem(g.x, g.y, g.size);
     for (const e of state.enemies) drawEnemy(e);
     if (state.phase !== "dead") drawPlayer(player);
     if (state.swing) drawSwing(state.swing, player);
+    for (const s of state.projectiles) drawProjectile(s);
 
     for (const pop of state.popups) {
       text(pop.text, pop.x, pop.y - 8, STYLE.gem, "center");
@@ -137,13 +145,143 @@ const Render = (() => {
     ctx.globalAlpha = 1;
   }
 
-  // L'épée : une lame qui sort du joueur dans la direction où il regarde.
-  // La zone réellement frappée (state.swing) est un peu plus large que la
-  // lame, pour pardonner un coup légèrement décalé.
+  // Un coffre fermé, qui brille un peu pour attirer l'œil.
+  function drawChest(c) {
+    const w = 12, h = 9;
+    const x = c.x - w / 2, y = c.y - h / 2;
+    const glow = 0.25 + 0.2 * Math.sin(clock * 4);
+    ctx.fillStyle = `rgba(242, 196, 77, ${glow})`;
+    ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+    ctx.fillStyle = STYLE.chest;
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = STYLE.chestLid;
+    ctx.fillRect(x, y, w, 3);
+    ctx.fillStyle = STYLE.chestLock;
+    ctx.fillRect(c.x - 1, y + 2, 2, 3);
+  }
+
+  // Une arme posée au sol, qui flotte légèrement.
+  function drawItemOnGround(d) {
+    const bob = Math.sin(clock * 3);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+    ctx.fillRect(d.x - 4, d.y + 5, 8, 2);
+    drawIcon(d.item, d.x, d.y + bob);
+  }
+
+  // Les icônes des objets, centrées en (x, y), dans un carré d'environ 10 px.
+  function drawIcon(key, x, y) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.lineCap = "round";
+    switch (key) {
+      case "sword":
+        ctx.fillStyle = STYLE.sword;
+        ctx.fillRect(-1, -5, 2, 7);
+        ctx.fillStyle = STYLE.chestLock;
+        ctx.fillRect(-3, 2, 6, 1.5);
+        ctx.fillStyle = STYLE.chestLid;
+        ctx.fillRect(-0.75, 3.5, 1.5, 2);
+        break;
+      case "spear":
+        ctx.fillStyle = STYLE.chestLid;
+        ctx.fillRect(-0.6, -3, 1.2, 9);
+        ctx.fillStyle = STYLE.sword;
+        ctx.beginPath();
+        ctx.moveTo(0, -6); ctx.lineTo(2, -2.5); ctx.lineTo(-2, -2.5);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      case "bow":
+        ctx.strokeStyle = STYLE.boomerang;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(-2, 0, 5, -Math.PI / 2.4, Math.PI / 2.4);
+        ctx.stroke();
+        ctx.strokeStyle = STYLE.sword;
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(-0.4, -4.6); ctx.lineTo(-0.4, 4.6);
+        ctx.stroke();
+        break;
+      case "boomerang":
+        ctx.strokeStyle = STYLE.boomerang;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-4, -3); ctx.lineTo(0, 3); ctx.lineTo(4, -3);
+        ctx.stroke();
+        break;
+      case "heart":
+        ctx.fillStyle = STYLE.heart;
+        ctx.fillRect(-4, -3, 3.5, 3.5);
+        ctx.fillRect(0.5, -3, 3.5, 3.5);
+        ctx.beginPath();
+        ctx.moveTo(-4, 0); ctx.lineTo(4, 0); ctx.lineTo(0, 4.5);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      case "boots":
+        ctx.fillStyle = STYLE.pincer;
+        ctx.fillRect(-3, -4, 3, 7);
+        ctx.fillRect(-3, 1.5, 6.5, 2.5);
+        ctx.fillStyle = STYLE.eye;
+        ctx.fillRect(-3, -4, 3, 1);
+        break;
+      case "magnet":
+        ctx.strokeStyle = STYLE.heart;
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = "butt";
+        ctx.beginPath();
+        ctx.moveTo(-3, -4); ctx.lineTo(-3, 0.5);
+        ctx.arc(0, 0.5, 3, Math.PI, 0, true);
+        ctx.lineTo(3, -4);
+        ctx.stroke();
+        ctx.fillStyle = STYLE.eye;
+        ctx.fillRect(-4.1, -5, 2.2, 1.6);
+        ctx.fillRect(1.9, -5, 2.2, 1.6);
+        break;
+      case "lantern":
+        ctx.fillStyle = "rgba(255, 210, 122, 0.3)";
+        ctx.beginPath();
+        ctx.arc(0, 0.5, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = STYLE.wall;
+        ctx.fillRect(-2.5, -4, 5, 1.5);
+        ctx.fillStyle = STYLE.fireCore;
+        ctx.fillRect(-2, -2.5, 4, 5);
+        ctx.fillStyle = STYLE.wall;
+        ctx.fillRect(-2.5, 2.5, 5, 1.5);
+        break;
+    }
+    ctx.restore();
+  }
+
+  function drawProjectile(s) {
+    if (s.kind === "arrow") {
+      ctx.fillStyle = STYLE.arrow;
+      if (s.dir.x) ctx.fillRect(s.x - 4, s.y - 0.75, 8, 1.5);
+      else ctx.fillRect(s.x - 0.75, s.y - 4, 1.5, 8);
+      return;
+    }
+    // Le boomerang tourne sur lui-même.
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(clock * 18);
+    ctx.strokeStyle = STYLE.boomerang;
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(-4, -2.5); ctx.lineTo(0, 2.5); ctx.lineTo(4, -2.5);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Le coup de mêlée : une lame qui sort du joueur dans la direction du coup,
+  // de la longueur de l'arme. La zone réellement frappée (state.swing) est un
+  // peu plus large que la lame, pour pardonner un coup légèrement décalé.
   function drawSwing(s, p) {
     const f = s.dir;
-    const len = Config.ATTACK_REACH;
-    const thick = 3;
+    const len = s.weapon.reach;
+    const thick = s.weapon.width < 10 ? 2 : 3;
     const bx = p.x + f.x * (p.size / 2);
     const by = p.y + f.y * (p.size / 2);
     ctx.fillStyle = STYLE.sword;
@@ -171,6 +309,11 @@ const Render = (() => {
       ctx.fillStyle = i < p.hp ? STYLE.heart : STYLE.heartEmpty;
       ctx.fillRect(4 + i * 9, 4, 7, 7);
     }
+    // Les artefacts trouvés, au milieu de la bande du bas.
+    const arts = state.run.artifacts;
+    const ax = Config.ZONE_W / 2 - ((arts.length - 1) * 12) / 2;
+    arts.forEach((a, i) => drawIcon(a, ax + i * 12, Config.ZONE_H - 8));
+
     // Butin porté, en jeu : c'est ce qu'on risque.
     drawGem(Config.ZONE_W - 40, 8, 7);
     text(`${state.run.carried}`, Config.ZONE_W - 33, 4, STYLE.text, "left");
@@ -185,13 +328,16 @@ const Render = (() => {
 
   // La mini-carte montre ce qu'on sait : les écrans visités et leurs portes,
   // les écrans entrevus derrière ces portes, et les camps, connus d'avance
-  // puisque ce sont les destinations. Le reste de la carte est à découvrir.
+  // puisque ce sont les destinations. Le reste de la carte est à découvrir,
+  // sauf avec la Lanterne, qui montre tout. Un point doré marque un coffre
+  // pas encore ouvert dans un écran connu.
   function drawMinimap(state) {
     const cell = 4, step = 6;
     const ox = Config.ZONE_W - Config.WALL - 2 - ZoneRegistry.width * step;
     const oy = Config.WALL + 2;
     const visited = (x, y) => state.visited.has(`${x},${y}`);
-    const known = (c) => visited(c.x, c.y) || ZoneRegistry.get(c.x, c.y).camp ||
+    const lantern = World.has("lantern");
+    const known = (c) => lantern || visited(c.x, c.y) || ZoneRegistry.get(c.x, c.y).camp ||
       (c.links.left && visited(c.x - 1, c.y)) || (c.links.right && visited(c.x + 1, c.y)) ||
       (c.links.up && visited(c.x, c.y - 1)) || (c.links.down && visited(c.x, c.y + 1));
 
@@ -206,9 +352,14 @@ const Render = (() => {
       ctx.fillStyle = here ? STYLE.mapHere : ZoneRegistry.get(c.x, c.y).camp ? STYLE.mapCamp
         : seen ? STYLE.mapSeen : STYLE.mapFog;
       ctx.fillRect(x, y, cell, cell);
+      const chestHere = c.chest && !state.run.opened.has(`${c.x},${c.y}`);
+      if (chestHere && (seen || lantern) && !here) {
+        ctx.fillStyle = STYLE.chestLock;
+        ctx.fillRect(x + 1, y + 1, 2, 2);
+      }
       // Les portes d'un écran visité, vers la droite et vers le bas : chaque
       // passage n'est dessiné qu'une fois.
-      if (!seen) continue;
+      if (!seen && !lantern) continue;
       ctx.fillStyle = STYLE.mapSeen;
       if (c.links.right) ctx.fillRect(x + cell, y + 1, step - cell, 2);
       if (c.links.down) ctx.fillRect(x + 1, y + cell, 2, step - cell);
@@ -233,5 +384,19 @@ const Render = (() => {
     ctx.fillText(str, x, y);
   }
 
-  return { init, draw };
+  // Dessine l'icône d'un objet dans un autre canvas (le bouton d'attaque),
+  // avec les mêmes formes que dans le jeu.
+  function iconInto(canvas, key) {
+    const saved = ctx;
+    const size = canvas.width;
+    ctx = canvas.getContext("2d");
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+    // L'icône tient dans environ 12 px de zone.
+    ctx.setTransform(size / 12, 0, 0, size / 12, 0, 0);
+    if (key) drawIcon(key, 6, 6);
+    ctx = saved;
+  }
+
+  return { init, draw, iconInto };
 })();

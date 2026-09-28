@@ -123,13 +123,19 @@ const Enemies = (() => {
   }
 
   // Encaisse un coup venu de `dir` et renvoie true s'il en meurt.
-  function hit(e, dir, solids) {
-    e.hp -= 1;
-    e.stun = Config.ENEMY_STUN;
-    e.wake = 0;
-    e.waypoint = null;
-    Physics.moveAxis(e, dir.x ? "x" : "y", (dir.x || dir.y) * Config.ENEMY_KNOCKBACK, solids);
+  function hit(e, dir, solids, damage = 1, knockback = Config.ENEMY_KNOCKBACK) {
+    e.hp -= damage;
+    stun(e, Config.ENEMY_STUN);
+    Physics.moveAxis(e, dir.x ? "x" : "y", (dir.x || dir.y) * knockback, solids);
     return e.hp <= 0;
+  }
+
+  // Étourdi sans être blessé : immobile et inoffensif pendant `time`.
+  function stun(e, time) {
+    e.stun = Math.max(e.stun, time);
+    e.wake = 0;
+    e.lunge = 0;
+    e.waypoint = null;
   }
 
   function step(e, player, others, dt, nav, solids) {
@@ -187,5 +193,5 @@ const Enemies = (() => {
     }
   }
 
-  return { TYPES, SIZE, roster, spawn, step, hit, harmful };
+  return { TYPES, SIZE, roster, spawn, step, hit, stun, harmful };
 })();

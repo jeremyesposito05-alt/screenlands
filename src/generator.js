@@ -17,6 +17,8 @@
 //    premier.
 // 5. Décors : tirés au sort parmi ceux permis à cette distance, en évitant
 //    de répéter celui d'un voisin.
+// 6. Coffres : une arme de mêlée près du camp de base, une arme à distance
+//    plus loin, et des artefacts ailleurs, un coffre au plus par écran.
 
 const Generator = (() => {
   const DIRS = [
@@ -47,7 +49,8 @@ const Generator = (() => {
     const cells = new Map();
 
     const add = (x, y) => {
-      const c = { x, y, layout: null, distance: 0,
+      // `chest` : la clé de l'objet caché dans cet écran, ou null.
+      const c = { x, y, layout: null, distance: 0, chest: null,
                   links: { left: false, right: false, up: false, down: false } };
       cells.set(key(x, y), c);
       return c;
@@ -123,6 +126,24 @@ const Generator = (() => {
         .map((n) => n.layout));
       const fresh = allowed.filter((k) => !neighbours.has(k));
       c.layout = rng.pick(fresh.length ? fresh : allowed);
+    }
+
+    // 6. Coffres. Si une carte n'a pas d'écran assez proche ou assez loin, on
+    //    prend le plus proche de la règle plutôt que de ne rien cacher.
+    const free = () => wild.filter((c) => c.layout !== "camp" && !c.chest);
+    const hide = (item, fits, score) => {
+      const pool = free();
+      if (!pool.length) return;
+      const ok = pool.filter(fits);
+      const c = ok.length ? rng.pick(ok) : pool.sort((a, b) => score(a) - score(b))[0];
+      c.chest = item;
+    };
+    hide(rng.pick(LOOT.nearWeapons),
+      (c) => c.distance <= LOOT.NEAR_MAX, (c) => c.distance);
+    hide(rng.pick(LOOT.farWeapons),
+      (c) => c.distance >= LOOT.FAR_MIN, (c) => -c.distance);
+    for (const item of rng.shuffle(LOOT.artifacts).slice(0, LOOT.ARTIFACTS_PER_MAP)) {
+      hide(item, (c) => c.distance >= 2, (c) => -c.distance);
     }
 
     return { seed, size, base, cells, depth: far };

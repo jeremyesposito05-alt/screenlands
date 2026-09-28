@@ -39,15 +39,7 @@ const Config = Object.freeze({
   // Après un coup, le joueur est intouchable le temps de s'enfuir.
   HURT_INVULN: 1.2,
   HURT_KNOCKBACK: 16,
-
-  // --- Attaque ---
-  // Un coup d'épée devant soi : le joueur s'arrête le temps du coup, puis
-  // doit attendre un peu avant le suivant.
-  ATTACK_TIME: 0.18,
-  ATTACK_COOLDOWN: 0.32,
-  // La zone touchée : ATTACK_REACH devant le joueur, ATTACK_WIDTH de large.
-  ATTACK_REACH: 14,
-  ATTACK_WIDTH: 18,
+  // Les réglages de chaque arme et de chaque artefact sont dans items.js.
 
   // --- Carte ---
   // Une nouvelle carte à chaque expédition : MAP_ZONES écrans qui poussent

@@ -46,15 +46,27 @@ graphismes.
   Ils trouvent leur chemin autour des obstacles, sont plus lents que le
   joueur, et plus nombreux et plus rapides à mesure qu'on s'éloigne. Aucun
   près des camps.
-- **Une épée**, qui frappe devant soi. Le joueur s'arrête le temps du coup.
-  Un ennemi touché est repoussé et étourdi ; tué, il lâche une gemme de la
-  valeur de la zone, et reste mort jusqu'à la fin de l'expédition. Au-delà
-  de trois écrans, les ennemis encaissent deux coups.
-- **Trois cœurs.** Mourir fait perdre tout le butin porté et ramène au camp
-  de base.
+- **On part les mains vides**, et on fouille la carte. Six coffres y sont
+  cachés, un par écran au plus, dans un recoin du décor :
+  - une arme de mêlée, toujours à un ou deux écrans du camp de base :
+    **Épée** (coup rapide) ou **Lance** (longue, plus lente) ;
+  - une arme à distance, à trois écrans ou plus : **Arc** (une flèche
+    jusqu'au premier obstacle) ou **Boomerang** (étourdit sans blesser,
+    rapporte les gemmes qu'il touche, revient dans la main) ;
+  - trois artefacts sur quatre : **Réceptacle** (un cœur de plus),
+    **Bottes de vent** (vitesse +15 %), **Aimant** (attire les gemmes),
+    **Lanterne** (révèle la carte et ses coffres).
+
+  On tient une seule arme : en ramasser une autre fait tomber l'ancienne,
+  qu'on peut revenir chercher. On frappe sans s'arrêter ; le coup suit le
+  joueur. Un ennemi touché est repoussé et étourdi ; tué, il lâche une gemme
+  de la valeur de la zone, et reste mort jusqu'à la fin de l'expédition.
+  Au-delà de trois écrans, les ennemis encaissent deux coups.
+- **Trois cœurs.** Mourir fait perdre le butin porté et tout l'équipement,
+  et ramène au camp de base sur une nouvelle carte.
 - **Les feux de camp** mettent le butin porté à l'abri dans la banque et
-  rendent les cœurs. Rentrer au camp de base avec du butin, ou après avoir
-  tué, termine l'expédition : une nouvelle carte est tirée.
+  rendent les cœurs. Rentrer au camp de base après avoir pris quoi que ce
+  soit au monde termine l'expédition : nouvelle carte, mains vides.
 - **La banque** est conservée d'une partie à l'autre, dans le navigateur.
 - **Une mini-carte** en haut à droite : écrans visités et leurs portes,
   écrans entrevus derrière, camps, position.
@@ -73,8 +85,9 @@ Ouvrir le lien dans Safari, puis `Partager > Sur l'écran d'accueil`. Lancé
 depuis l'icône, le jeu s'ouvre en plein écran, sans la barre de Safari.
 
 On pose le doigt n'importe où : un joystick apparaît sous le doigt, et le
-joueur part dans la direction où on le fait glisser. Le bouton en bas à
-droite donne un coup d'épée : un pouce sur le joystick, l'autre sur le bouton.
+joueur part dans la direction où on le fait glisser. Dès qu'on a trouvé une
+arme, un bouton à son image apparaît en bas à droite : un pouce sur le
+joystick, l'autre sur le bouton.
 
 ## Sur PC
 
@@ -103,11 +116,13 @@ src/config.js        les constantes qui définissent la forme du monde
 src/physics.js       collisions entre corps et murs
 src/random.js        hasard à graine : une même graine redonne la même carte
 src/zones.js         les décors, la carte chargée et la ceinture de murs
-src/generator.js     tire une carte neuve à chaque expédition
+src/generator.js     tire une carte neuve à chaque expédition, et y cache les coffres
+src/items.js         les armes et les artefacts, décrits par des données
 src/nav.js           plus court chemin des ennemis autour des obstacles
 src/enemies.js       les ennemis : des fiches qui choisissent une règle de visée
 src/save.js          la progression permanente (la banque)
 src/input.js         clavier, joystick et bouton d'attaque
+src/weapons.js       les armes en action : coups de mêlée et projectiles
 src/world.js         l'expédition et ses règles : gemmes, coups, camps, transitions
 src/render.js        tout ce qui dessine, et rien d'autre
 src/main.js          la boucle de jeu

@@ -10,13 +10,16 @@
 // dans la zone, et il n'y a aucune caméra.
 //
 // La boucle du stop ou encore :
+// - le joueur part les mains vides ; il trouve armes et artefacts en fouillant
+//   les coffres de la carte, et les perd à la fin de l'expédition ;
 // - chaque gemme ramassée s'ajoute au butin porté, et vaut le double à
 //   chaque écran d'éloignement du camp de base ;
 // - s'approcher d'un feu de camp met le butin porté à l'abri dans la banque
 //   (Save) et rend tous les cœurs ;
-// - mourir fait perdre tout le butin porté et ramène au camp de base ;
-// - rentrer au camp de base termine l'expédition : une nouvelle carte est
-//   tirée, comme après la mort ;
+// - mourir fait perdre le butin porté et l'équipement, et ramène au camp de
+//   base sur une nouvelle carte ;
+// - rentrer au camp de base termine l'expédition de la même façon, le butin
+//   en moins puisqu'il vient d'être mis à l'abri ;
 // - un ennemi tué lâche une gemme de la valeur de la zone, et reste mort
 //   jusqu'à la fin de l'expédition, pour qu'on ne puisse pas en faire
 //   réapparaître en repassant une porte.
@@ -28,8 +31,17 @@ const World = (() => {
     zone: null,
     // Murs et obstacles de la zone chargée : tout ce qui arrête un corps.
     solids: [],
+    nav: null,
     gems: [],
     enemies: [],
+    // Le coffre de la zone s'il n'a pas été ouvert : {x, y, size, item}.
+    chest: null,
+    // Les objets posés au sol dans cette zone (armes lâchées) : la liste est
+    // celle de run.drops, donc ils y restent quand on revient.
+    drops: [],
+    // Le coup de mêlée en cours, et les projectiles en vol (voir Weapons).
+    swing: null,
+    projectiles: [],
     // Repère de centre du joueur, en pixels de zone.
     player: {
       kind: "player",
@@ -39,23 +51,27 @@ const World = (() => {
       hp: Config.PLAYER_HP,
       maxHp: Config.PLAYER_HP,
       invuln: 0,
-      // Dernière direction non nulle : c'est là que frappe l'épée.
+      // Dernière direction non nulle : c'est là que part le coup.
       facing: { x: 0, y: 1 },
       // Temps restant du coup en cours, et avant de pouvoir refrapper.
       attack: 0,
       attackCooldown: 0,
     },
-    // La zone que frappe le coup en cours, ou null : {x, y, w, h}.
-    swing: null,
-    // L'expédition en cours : tout ce qui meurt avec le joueur.
+    // L'expédition en cours : tout ce qui meurt avec elle.
     run: {
       carried: 0,
+      // L'arme en main (clé de ITEMS) ou null, et les artefacts trouvés.
+      weapon: null,
+      artifacts: [],
       // Gemmes déjà ramassées, "x,y,index", pour qu'une zone quittée puis
       // retrouvée ne les rende pas deux fois.
       taken: new Set(),
       // Ennemis tués par zone, "x,y" -> nombre : une zone retrouvée en
       // aligne d'autant moins.
       killed: new Map(),
+      // Coffres ouverts, "x,y", et objets posés au sol, "x,y" -> liste.
+      opened: new Set(),
+      drops: new Map(),
     },
     // Zones déjà vues de la carte en cours, pour la mini-carte.
     visited: new Set(),
@@ -64,19 +80,32 @@ const World = (() => {
     deadTimer: 0,
     // Message central temporaire : {title, detail, time}.
     banner: null,
-    // Petits chiffres qui s'envolent au ramassage : {x, y, text, time}.
+    // Petits textes qui s'envolent au ramassage : {x, y, text, time}.
     popups: [],
     // Le joueur est-il déjà près du feu ? Le repos ne se déclenche qu'en
     // arrivant, pas à chaque image passée à côté.
     atFire: false,
   };
 
-  // Tire une nouvelle carte et oublie tout ce qui concernait l'ancienne.
+  const zoneKey = () => `${state.coords.x},${state.coords.y}`;
+  const has = (artifact) => state.run.artifacts.includes(artifact);
+
+  // Tire une nouvelle carte, et remet l'expédition à zéro : plus d'arme, plus
+  // d'artefact, plus rien de ce qui concernait l'ancienne carte. Le butin
+  // porté n'est pas touché ici : la mort le perd, le camp le met à l'abri.
   function newMap(seed) {
     ZoneRegistry.load(Generator.generate(seed ?? Generator.freshSeed()));
-    state.run.taken.clear();
-    state.run.killed.clear();
+    const r = state.run;
+    r.taken.clear();
+    r.killed.clear();
+    r.opened.clear();
+    r.drops.clear();
+    r.weapon = null;
+    r.artifacts = [];
     state.visited.clear();
+    const p = state.player;
+    p.maxHp = Config.PLAYER_HP;
+    p.hp = Math.min(p.hp, p.maxHp);
   }
 
   // Une nouvelle expédition, au camp de base : au lancement et après la mort.
@@ -87,9 +116,6 @@ const World = (() => {
     state.run.carried = 0;
     p.hp = p.maxHp;
     p.invuln = 0;
-    p.attack = 0;
-    p.attackCooldown = 0;
-    state.swing = null;
     p.x = Config.ZONE_W / 2;
     p.y = Config.ZONE_H / 2 + 56;
     state.phase = "play";
@@ -110,11 +136,26 @@ const World = (() => {
     state.atFire = false;
     state.popups = [];
 
+    // Coups et projectiles ne suivent pas le joueur d'un écran à l'autre : le
+    // boomerang revient aussitôt dans sa main.
+    const p = state.player;
+    state.swing = null;
+    state.projectiles = [];
+    p.attack = 0;
+
     const value = gemValue(distance);
     state.gems = zone.gems
       .map((at, i) => ({ kind: "gem", id: `${cx},${cy},${i}`, x: at.x, y: at.y,
                          size: Config.GEM_SIZE, value }))
       .filter((g) => !state.run.taken.has(g.id));
+
+    const key = `${cx},${cy}`;
+    const item = ZoneRegistry.chest(cx, cy);
+    state.chest = item && !state.run.opened.has(key)
+      ? { kind: "chest", x: zone.chest.x, y: zone.chest.y, size: 12, item }
+      : null;
+    if (!state.run.drops.has(key)) state.run.drops.set(key, []);
+    state.drops = state.run.drops.get(key);
 
     const table = Config.ENEMIES_BY_DISTANCE;
     // La composition de la zone est tirée avec sa propre graine : la même à
@@ -123,8 +164,7 @@ const World = (() => {
     const planned = zone.camp ? 0 : table[Math.min(distance, table.length - 1)];
     const rng = makeRandom(deriveSeed(ZoneRegistry.seed, cx, cy));
     const roster = Enemies.roster(planned, distance, rng)
-      .slice(state.run.killed.get(`${cx},${cy}`) || 0);
-    const p = state.player;
+      .slice(state.run.killed.get(key) || 0);
     const spots = zone.spawns
       .filter((at) => Math.hypot(at.x - p.x, at.y - p.y) >= Config.SPAWN_SAFE_DISTANCE)
       .sort((a, b) => Math.hypot(b.x - p.x, b.y - p.y) - Math.hypot(a.x - p.x, a.y - p.y));
@@ -135,6 +175,12 @@ const World = (() => {
 
   function gemValue(distance) {
     return Config.GEM_BASE * 2 ** Math.max(0, distance - 1);
+  }
+
+  function speed() {
+    let bonus = 0;
+    for (const a of state.run.artifacts) bonus += ITEMS[a].speedBonus || 0;
+    return Config.PLAYER_SPEED * (1 + bonus);
   }
 
   function step(dt, dir, attack) {
@@ -150,21 +196,25 @@ const World = (() => {
     p.invuln = Math.max(0, p.invuln - dt);
     p.attackCooldown = Math.max(0, p.attackCooldown - dt);
 
-    if (attack && p.attackCooldown <= 0) startSwing();
-    if (p.attack > 0) {
-      // Le joueur est planté le temps du coup, comme dans Zelda : il peut
-      // viser, pas frapper en courant.
-      p.attack -= dt;
-      strike();
-      if (p.attack <= 0) state.swing = null;
-    } else {
-      if (dir.x || dir.y) p.facing = dir;
-      const dist = Config.PLAYER_SPEED * dt;
+    // Le joueur ne s'arrête jamais pour frapper. Il garde seulement la
+    // direction de son coup de mêlée tant que celui-ci dure.
+    if (dir.x || dir.y) {
+      if (!state.swing) p.facing = dir;
+      const dist = speed() * dt;
       if (dir.x) Physics.moveAxis(p, "x", dir.x * dist, state.solids);
       if (dir.y) Physics.moveAxis(p, "y", dir.y * dist, state.solids);
     }
+    if (attack && state.run.weapon) Weapons.use(state, ITEMS[state.run.weapon]);
+    Weapons.update(state, dt, { kill, collect: pickUp });
 
-    pickUpGems();
+    attractGems(dt);
+    state.gems = state.gems.filter((g) => {
+      if (!Physics.overlapsBody(p, g)) return true;
+      pickUp(g);
+      return false;
+    });
+    openChest();
+    pickUpDrops();
     restAtFire();
 
     for (const e of state.enemies) {
@@ -176,50 +226,80 @@ const World = (() => {
     changeZoneIfNeeded();
   }
 
-  function startSwing() {
-    const p = state.player;
-    p.attack = Config.ATTACK_TIME;
-    p.attackCooldown = Config.ATTACK_COOLDOWN;
-
-    // La zone frappée, devant le joueur : ATTACK_REACH dans la direction où il
-    // regarde, ATTACK_WIDTH en travers.
-    const f = p.facing;
-    const reach = Config.ATTACK_REACH, width = Config.ATTACK_WIDTH;
-    const cx = p.x + f.x * (p.size / 2 + reach / 2);
-    const cy = p.y + f.y * (p.size / 2 + reach / 2);
-    const w = f.x ? reach : width;
-    const h = f.x ? width : reach;
-    state.swing = { kind: "sword", x: cx - w / 2, y: cy - h / 2, w, h, dir: { ...f }, hit: new Set() };
+  function kill(e) {
+    const key = zoneKey();
+    state.run.killed.set(key, (state.run.killed.get(key) || 0) + 1);
+    state.gems.push({ kind: "gem", id: null, x: e.x, y: e.y,
+                      size: Config.GEM_SIZE, value: gemValue(state.distance) });
   }
 
-  // Frappe tout ce qui est dans la zone du coup, une seule fois par coup : un
-  // ennemi qui y reste pendant tout le mouvement ne perd qu'un point de vie.
-  function strike() {
-    const s = state.swing;
-    const key = `${state.coords.x},${state.coords.y}`;
-    state.enemies = state.enemies.filter((e) => {
-      if (s.hit.has(e) || !Physics.overlapsRect(e, s)) return true;
-      s.hit.add(e);
-      if (!Enemies.hit(e, s.dir, state.solids)) return true;
-
-      state.run.killed.set(key, (state.run.killed.get(key) || 0) + 1);
-      state.gems.push({ kind: "gem", id: null, x: e.x, y: e.y,
-                        size: Config.GEM_SIZE, value: gemValue(state.distance) });
-      return false;
-    });
+  // Une gemme ramassée, par le joueur ou par le boomerang.
+  function pickUp(g) {
+    state.run.carried += g.value;
+    // Les gemmes lâchées par un ennemi n'ont pas d'identifiant : elles ne
+    // réapparaîtraient de toute façon pas.
+    if (g.id) state.run.taken.add(g.id);
+    state.popups.push({ x: g.x, y: g.y, text: `+${g.value}`, time: 0.8 });
   }
 
-  function pickUpGems() {
+  // L'aimant tire vers le joueur les gemmes assez proches.
+  function attractGems(dt) {
+    if (!has("magnet")) return;
+    const { radius, pull } = ITEMS.magnet;
     const p = state.player;
-    state.gems = state.gems.filter((g) => {
-      if (!Physics.overlapsBody(p, g)) return true;
-      state.run.carried += g.value;
-      // Les gemmes lâchées par un ennemi n'ont pas d'identifiant : elles ne
-      // réapparaîtraient de toute façon pas.
-      if (g.id) state.run.taken.add(g.id);
-      state.popups.push({ x: g.x, y: g.y, text: `+${g.value}`, time: 0.8 });
-      return false;
-    });
+    for (const g of state.gems) {
+      const dx = p.x - g.x, dy = p.y - g.y;
+      const d = Math.hypot(dx, dy);
+      if (d > radius || d < 0.01) continue;
+      const s = Math.min(d, pull * dt);
+      g.x += (dx / d) * s;
+      g.y += (dy / d) * s;
+    }
+  }
+
+  function openChest() {
+    const c = state.chest;
+    if (!c || !Physics.overlapsBody(state.player, c)) return;
+    state.run.opened.add(zoneKey());
+    state.chest = null;
+    take(c.item);
+  }
+
+  // Une arme lâchée n'est reprenable qu'après s'en être éloigné : sinon, en
+  // l'échangeant, on la reprendrait aussitôt.
+  function pickUpDrops() {
+    const p = state.player;
+    for (let i = state.drops.length - 1; i >= 0; i--) {
+      const d = state.drops[i];
+      const touching = Physics.overlapsBody(p, d);
+      if (!touching) {
+        d.ready = true;
+      } else if (d.ready) {
+        state.drops.splice(i, 1);
+        take(d.item);
+      }
+    }
+  }
+
+  // Le joueur prend un objet : une arme remplace celle qu'il tenait, qui tombe
+  // à ses pieds ; un artefact s'ajoute.
+  function take(key) {
+    const item = ITEMS[key];
+    const p = state.player;
+    if (item.type === "weapon") {
+      if (state.run.weapon) {
+        state.drops.push({ kind: "item", item: state.run.weapon, x: p.x, y: p.y, size: 10, ready: false });
+      }
+      state.run.weapon = key;
+      p.attackCooldown = 0;
+    } else {
+      state.run.artifacts.push(key);
+      if (key === "heart") {
+        p.maxHp += 1;
+        p.hp += 1;
+      }
+    }
+    showBanner(item.name, item.hint);
   }
 
   function restAtFire() {
@@ -233,26 +313,29 @@ const World = (() => {
 
   function rest() {
     const p = state.player;
-    const carried = state.run.carried;
+    const r = state.run;
+    const carried = r.carried;
     const healed = p.hp < p.maxHp;
     p.hp = p.maxHp;
 
     if (carried > 0) {
       Save.deposit(carried);
-      state.run.carried = 0;
+      r.carried = 0;
       showBanner("Butin à l'abri", `+${carried}  ·  banque ${Save.data.bank}`);
     } else if (healed) {
       showBanner("Repos", "cœurs rendus");
     }
 
     // Au camp de base, l'expédition est terminée dès qu'on a pris quelque
-    // chose au monde : la carte change. Le joueur reste où il est, au coin du
-    // feu, et repart sur un chemin neuf.
-    if (state.zone.base && (state.run.taken.size > 0 || state.run.killed.size > 0)) {
+    // chose au monde : la carte change et l'équipement est perdu. Le joueur
+    // reste où il est, au coin du feu, et repart les mains vides.
+    const tookSomething = r.taken.size > 0 || r.killed.size > 0 || r.opened.size > 0;
+    if (state.zone.base && tookSomething) {
       newMap();
+      p.hp = p.maxHp;
       enterZone(ZoneRegistry.base.x, ZoneRegistry.base.y);
       state.atFire = true;
-      if (carried === 0) showBanner("Nouvelle expédition", "la carte a changé");
+      if (carried === 0) showBanner("Nouvelle expédition", "nouvelle carte, mains vides");
     }
   }
 
@@ -282,7 +365,9 @@ const World = (() => {
     state.run.carried = 0;
     state.phase = "dead";
     state.deadTimer = Config.DEATH_PAUSE;
-    showBanner("Expédition perdue", lost > 0 ? `-${lost} de butin` : "rien à perdre");
+    state.swing = null;
+    state.projectiles = [];
+    showBanner("Expédition perdue", lost > 0 ? `-${lost} de butin, équipement perdu` : "équipement perdu");
   }
 
   function changeZoneIfNeeded() {
@@ -345,5 +430,5 @@ const World = (() => {
     state.popups = state.popups.filter((pop) => pop.time > 0);
   }
 
-  return { state, newExpedition, gemValue, step };
+  return { state, newExpedition, gemValue, step, has };
 })();

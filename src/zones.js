@@ -14,7 +14,10 @@
 // ce qui ne tombe dans une porte que si les portes se font face.
 //
 // Règle pour qui dessine une zone : depuis chacune des quatre portes, on doit
-// pouvoir atteindre les trois autres et toutes les gemmes. Le test de
+// pouvoir atteindre les trois autres, toutes les gemmes et la cachette du
+// coffre (`chest`), qu'on choisit volontairement dans un recoin. Jamais en haut
+// à droite ni en bas à droite : la mini-carte et le bouton d'attaque les
+// cacheraient. Le test de
 // génération le vérifie pour chaque zone.
 //
 // Chaque élément porte un `kind` : c'est lui que le rendu lira pour choisir
@@ -42,6 +45,7 @@ const LAYOUTS = {
     obstacles: [obstacle(48, 96), obstacle(144, 320)],
     gems: [p(144, 112), p(48, 300), p(96, 250)],
     spawns: [p(48, 200), p(144, 200), p(96, 60), p(96, 360)],
+    chest: p(40, 40),
   },
   rocks: {
     name: "Rochers",
@@ -53,6 +57,7 @@ const LAYOUTS = {
     ],
     gems: [p(96, 80), p(96, 336), p(152, 208)],
     spawns: [p(40, 150), p(152, 150), p(40, 270), p(152, 270)],
+    chest: p(96, 178),
   },
   corridor: {
     name: "Couloir",
@@ -64,6 +69,7 @@ const LAYOUTS = {
     ],
     gems: [p(96, 208), p(32, 128), p(160, 288)],
     spawns: [p(96, 60), p(96, 360), p(40, 208), p(152, 208)],
+    chest: p(160, 128),
   },
   pillars: {
     name: "Piliers",
@@ -75,6 +81,7 @@ const LAYOUTS = {
     ],
     gems: [p(96, 128), p(96, 288), p(48, 208)],
     spawns: [p(144, 208), p(48, 60), p(144, 360), p(40, 360)],
+    chest: p(40, 40),
   },
   // Deux murs en travers, chacun percé d'un seul passage au centre : pour
   // traverser de haut en bas, on ne peut pas éviter ce qui s'y trouve. Le
@@ -89,6 +96,7 @@ const LAYOUTS = {
     ],
     gems: [p(40, 90), p(152, 330), p(96, 208)],
     spawns: [p(40, 60), p(152, 60), p(40, 360), p(152, 360)],
+    chest: p(152, 90),
   },
   // Un bloc central et quatre autour : on circule par les bords.
   crossing: {
@@ -101,6 +109,7 @@ const LAYOUTS = {
     ],
     gems: [p(96, 150), p(96, 266), p(28, 208)],
     spawns: [p(40, 60), p(152, 60), p(40, 360), p(152, 360)],
+    chest: p(30, 40),
   },
   // Des pierres d'une tuile éparpillées : beaucoup de recoins pour se faire
   // coincer.
@@ -115,6 +124,7 @@ const LAYOUTS = {
     ],
     gems: [p(40, 120), p(152, 240), p(96, 208)],
     spawns: [p(96, 60), p(40, 300), p(152, 120), p(120, 380)],
+    chest: p(40, 390),
   },
   // Un camp : pas d'obstacle, pas d'ennemi, un feu au centre. S'en approcher
   // met le butin à l'abri et soigne.
@@ -167,6 +177,8 @@ const ZoneRegistry = (() => {
     distance(cx, cy) { return cell(cx, cy).distance; },
     // Les côtés de la zone qui ont une porte vers une voisine.
     exits(cx, cy) { return cell(cx, cy).links; },
+    // L'objet caché dans le coffre de cet écran, ou null.
+    chest(cx, cy) { return cell(cx, cy).chest; },
     // Tous les écrans, pour la mini-carte.
     cells() { return map.cells.values(); },
   };
