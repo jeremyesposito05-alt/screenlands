@@ -13,12 +13,12 @@
 //    une porte, pour qu'il y ait plus d'un chemin et qu'on puisse fuir.
 // 3. Distances : le nombre d'écrans à traverser depuis le camp de base, par
 //    le plus court chemin.
-// 4. Camps : un camp avancé tout au bout, un autre à mi-chemin, loin du
-//    premier.
-// 5. Décors : tirés au sort parmi ceux permis à cette distance, en évitant
+// 4. Décors : tirés au sort parmi ceux permis à cette distance, en évitant
 //    de répéter celui d'un voisin.
-// 6. Coffres : une arme de mêlée près du camp de base, une arme à distance
+// 5. Coffres : une arme de mêlée près du camp de base, une arme à distance
 //    plus loin, et des artefacts ailleurs, un coffre au plus par écran.
+// 6. Camp : un seul à la fois, installé dans un écran ordinaire. Quand il a
+//    servi, il s'éteint et moveCamp() en allume un autre ailleurs.
 
 const Generator = (() => {
   const DIRS = [
@@ -103,22 +103,12 @@ const Generator = (() => {
       }
     }
 
-    // 4. Camps.
     start.layout = "base";
     const wild = [...cells.values()].filter((c) => c !== start);
     const far = Math.max(...wild.map((c) => c.distance));
-    const camps = [];
-    const farthest = wild.filter((c) => c.distance === far);
-    camps.push(rng.pick(farthest));
-    const middle = wild.filter((c) =>
-      c.distance >= Config.CAMP_MIN_DISTANCE && c.distance < far &&
-      Math.abs(c.x - camps[0].x) + Math.abs(c.y - camps[0].y) >= 3);
-    if (middle.length) camps.push(rng.pick(middle));
-    for (const c of camps) c.layout = "camp";
 
-    // 5. Décors.
+    // 4. Décors.
     for (const c of rng.shuffle(wild)) {
-      if (c.layout) continue;
       const allowed = WILD_LAYOUTS.filter((k) => LAYOUTS[k].minDistance <= c.distance);
       const neighbours = new Set(DIRS
         .map((d) => cells.get(key(c.x + d.dx, c.y + d.dy)))
@@ -128,9 +118,9 @@ const Generator = (() => {
       c.layout = rng.pick(fresh.length ? fresh : allowed);
     }
 
-    // 6. Coffres. Si une carte n'a pas d'écran assez proche ou assez loin, on
+    // 5. Coffres. Si une carte n'a pas d'écran assez proche ou assez loin, on
     //    prend le plus proche de la règle plutôt que de ne rien cacher.
-    const free = () => wild.filter((c) => c.layout !== "camp" && !c.chest);
+    const free = () => wild.filter((c) => !c.chest);
     const hide = (item, fits, score) => {
       const pool = free();
       if (!pool.length) return;
@@ -146,7 +136,35 @@ const Generator = (() => {
       hide(item, (c) => c.distance >= 2, (c) => -c.distance);
     }
 
-    return { seed, size, base, cells, depth: far };
+    // 6. Le premier camp, à portée : ni collé au camp de base, ni au bout.
+    //    Les suivants seront tirés par moveCamp(), avec leur propre hasard
+    //    à graine, pour qu'une même carte déroule toujours la même suite de
+    //    camps.
+    const map = { seed, size, base, cells, depth: far, camp: null,
+                  campRng: makeRandom(deriveSeed(seed, 7777)) };
+    placeCamp(map, (c) => c.distance >= CAMP_FIRST_MIN && c.distance <= CAMP_FIRST_MAX);
+    return map;
+  }
+
+  const CAMP_FIRST_MIN = 2;
+  const CAMP_FIRST_MAX = 4;
+  // Un nouveau camp s'allume au moins à cette distance (en ligne droite, en
+  // écrans) de celui qu'on vient d'utiliser : il faut repartir le chercher.
+  const CAMP_MOVE_MIN = 3;
+
+  function placeCamp(map, fits) {
+    const wild = [...map.cells.values()].filter((c) => c.layout !== "base");
+    const ok = wild.filter(fits);
+    const c = map.campRng.pick(ok.length ? ok : wild);
+    map.camp = { x: c.x, y: c.y };
+  }
+
+  // Le camp vient de servir : il s'éteint, et un autre s'allume ailleurs, loin
+  // de lui et jamais dans l'écran du camp de base.
+  function moveCamp(map) {
+    const old = map.camp;
+    placeCamp(map, (c) => c.distance >= 2 &&
+      Math.abs(c.x - old.x) + Math.abs(c.y - old.y) >= CAMP_MOVE_MIN);
   }
 
   // Une graine neuve pour chaque expédition.
@@ -154,5 +172,5 @@ const Generator = (() => {
     return (Math.random() * 4294967296) >>> 0;
   }
 
-  return { generate, freshSeed };
+  return { generate, moveCamp, freshSeed };
 })();

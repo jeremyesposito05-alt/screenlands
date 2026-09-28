@@ -34,6 +34,7 @@ const Render = (() => {
     chestLock: "#f2c44d",
     gem: "#5fd4e8",
     fire: "#f08a3c",
+    portal: "#a98bf0",
     fireCore: "#ffd27a",
     text: "#c9d1dc",
     dim: "#8f9bad",
@@ -69,7 +70,8 @@ const Render = (() => {
     ctx.fillStyle = zone.ground;
     ctx.fillRect(0, 0, Config.ZONE_W, Config.ZONE_H);
 
-    if (zone.fire) drawFire(zone.fire);
+    if (state.fire) drawFire(state.fire);
+    if (state.portal) drawPortal(state.portal);
     for (const s of solids) {
       ctx.fillStyle = STYLE[s.kind];
       ctx.fillRect(s.x, s.y, s.w, s.h);
@@ -103,6 +105,24 @@ const Render = (() => {
     ctx.beginPath();
     ctx.arc(f.x, f.y, Config.CAMP_RADIUS, 0, Math.PI * 2);
     ctx.stroke();
+  }
+
+  // Le portail : un anneau qui tourne, pour qu'on ne le confonde pas avec un
+  // feu.
+  function drawPortal(pt) {
+    const r = Config.PORTAL_RADIUS;
+    ctx.fillStyle = "rgba(150, 110, 230, 0.18)";
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = STYLE.portal;
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 3; i++) {
+      const a = clock * 2 + (i * Math.PI * 2) / 3;
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, r - 2, a, a + 1.2);
+      ctx.stroke();
+    }
   }
 
   function drawGem(x, y, size) {
@@ -320,24 +340,25 @@ const Render = (() => {
 
     // En bas : ce que vaut une gemme ici, et ce qui est déjà à l'abri.
     const y = Config.ZONE_H - 12;
-    const value = state.zone.camp ? state.zone.name.toLowerCase()
-      : `gemme ×${World.gemValue(state.distance)}`;
+    const value = state.zone.safe ? state.zone.name.toLowerCase()
+      : state.fire ? "camp" : `gemme ×${World.gemValue(state.distance)}`;
     text(value, 4, y, STYLE.dim, "left");
     text(`banque ${Save.data.bank}`, Config.ZONE_W - 4, y, STYLE.dim, "right");
   }
 
-  // La mini-carte montre ce qu'on sait : les écrans visités et leurs portes,
-  // les écrans entrevus derrière ces portes, et les camps, connus d'avance
-  // puisque ce sont les destinations. Le reste de la carte est à découvrir,
-  // sauf avec la Lanterne, qui montre tout. Un point doré marque un coffre
-  // pas encore ouvert dans un écran connu.
+  // La mini-carte montre ce qu'on sait : le camp de base (violet, comme son
+  // portail), les écrans visités et leurs portes, et les écrans entrevus
+  // derrière ces portes. Le camp (orange) n'y figure que si on l'a vu : il
+  // faut le chercher. Le reste est à découvrir, sauf avec la Lanterne, qui
+  // montre tout. Un point doré marque un coffre pas encore ouvert.
   function drawMinimap(state) {
     const cell = 4, step = 6;
     const ox = Config.ZONE_W - Config.WALL - 2 - ZoneRegistry.width * step;
     const oy = Config.WALL + 2;
     const visited = (x, y) => state.visited.has(`${x},${y}`);
     const lantern = World.has("lantern");
-    const known = (c) => lantern || visited(c.x, c.y) || ZoneRegistry.get(c.x, c.y).camp ||
+    const isBase = (c) => c.x === ZoneRegistry.base.x && c.y === ZoneRegistry.base.y;
+    const known = (c) => lantern || visited(c.x, c.y) || isBase(c) ||
       (c.links.left && visited(c.x - 1, c.y)) || (c.links.right && visited(c.x + 1, c.y)) ||
       (c.links.up && visited(c.x, c.y - 1)) || (c.links.down && visited(c.x, c.y + 1));
 
@@ -349,8 +370,8 @@ const Render = (() => {
       const x = ox + c.x * step, y = oy + c.y * step;
       const here = c.x === state.coords.x && c.y === state.coords.y;
       const seen = visited(c.x, c.y);
-      ctx.fillStyle = here ? STYLE.mapHere : ZoneRegistry.get(c.x, c.y).camp ? STYLE.mapCamp
-        : seen ? STYLE.mapSeen : STYLE.mapFog;
+      ctx.fillStyle = here ? STYLE.mapHere : ZoneRegistry.isCamp(c.x, c.y) ? STYLE.mapCamp
+        : isBase(c) ? STYLE.portal : seen ? STYLE.mapSeen : STYLE.mapFog;
       ctx.fillRect(x, y, cell, cell);
       const chestHere = c.chest && !state.run.opened.has(`${c.x},${c.y}`);
       if (chestHere && (seen || lantern) && !here) {

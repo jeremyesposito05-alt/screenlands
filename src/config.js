@@ -53,8 +53,6 @@ const Config = Object.freeze({
   // la carte est retirée : la valeur des gemmes double à chaque écran, et un
   // long couloir la ferait exploser.
   MAP_MAX_DISTANCE: 9,
-  // Distance minimale, en écrans, d'un camp avancé au camp de base.
-  CAMP_MIN_DISTANCE: 3,
 
   // --- Stop ou encore ---
   // Une gemme vaut GEM_BASE x 2^(distance - 1) : 1, 2, 4, 8... La distance
@@ -64,6 +62,9 @@ const Config = Object.freeze({
   GEM_SIZE: 8,
   // À quelle distance du feu de camp le butin est mis à l'abri.
   CAMP_RADIUS: 20,
+  // À quelle distance du portail du camp de base on part pour une nouvelle
+  // expédition.
+  PORTAL_RADIUS: 10,
 
   // --- Ennemis ---
   // Leur nombre par zone, indexé par la distance au camp de base (au-delà,

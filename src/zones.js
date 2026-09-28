@@ -3,22 +3,23 @@
 // Les zones et la carte du monde.
 //
 // Une zone est une donnée passive : un décor (fond, obstacles) et des
-// emplacements (gemmes, apparitions d'ennemis, feu de camp). Elle ne sait pas
-// où elle se trouve dans le monde. Combien d'ennemis apparaissent et ce que
-// vaut une gemme dépendent de la distance au camp de base, et c'est World
-// qui en décide.
+// emplacements (gemmes, apparitions d'ennemis, coffre, feu de camp). Elle ne
+// sait pas où elle se trouve dans le monde. Combien d'ennemis apparaissent et
+// ce que vaut une gemme dépendent de la distance au camp de base, et c'est
+// World qui en décide.
 //
 // Sa ceinture de murs n'est pas décrite ici : elle est calculée par
 // borderWalls(), pour que toutes les portes soient au même endroit. World
 // fait ressortir le joueur du côté opposé en gardant son autre coordonnée,
 // ce qui ne tombe dans une porte que si les portes se font face.
 //
-// Règle pour qui dessine une zone : depuis chacune des quatre portes, on doit
-// pouvoir atteindre les trois autres, toutes les gemmes et la cachette du
-// coffre (`chest`), qu'on choisit volontairement dans un recoin. Jamais en haut
-// à droite ni en bas à droite : la mini-carte et le bouton d'attaque les
-// cacheraient. Le test de
-// génération le vérifie pour chaque zone.
+// Règles pour qui dessine une zone :
+// - depuis chacune des quatre portes, on doit pouvoir atteindre les trois
+//   autres, toutes les gemmes, la cachette du coffre (`chest`) et
+//   l'emplacement du feu (`fire`) ;
+// - le coffre va dans un recoin, jamais en haut à droite ni en bas à droite :
+//   la mini-carte et le bouton d'attaque le cacheraient.
+// Le test des décors vérifie tout cela pour chaque zone.
 //
 // Chaque élément porte un `kind` : c'est lui que le rendu lira pour choisir
 // un sprite quand les graphismes remplaceront les rectangles.
@@ -36,7 +37,8 @@ function block(x, y, w, h) {
 const p = (x, y) => ({ x, y });
 
 // `minDistance` : une zone n'apparaît pas plus près du camp de base, pour
-// réserver les décors les plus piégeux au loin.
+// réserver les décors les plus piégeux au loin. `fire` : où s'allume le feu
+// quand le camp s'installe dans cette zone.
 const LAYOUTS = {
   clearing: {
     name: "Clairière",
@@ -46,6 +48,7 @@ const LAYOUTS = {
     gems: [p(144, 112), p(48, 300), p(96, 250)],
     spawns: [p(48, 200), p(144, 200), p(96, 60), p(96, 360)],
     chest: p(40, 40),
+    fire: p(96, 190),
   },
   rocks: {
     name: "Rochers",
@@ -58,6 +61,7 @@ const LAYOUTS = {
     gems: [p(96, 80), p(96, 336), p(152, 208)],
     spawns: [p(40, 150), p(152, 150), p(40, 270), p(152, 270)],
     chest: p(96, 178),
+    fire: p(96, 240),
   },
   corridor: {
     name: "Couloir",
@@ -70,6 +74,7 @@ const LAYOUTS = {
     gems: [p(96, 208), p(32, 128), p(160, 288)],
     spawns: [p(96, 60), p(96, 360), p(40, 208), p(152, 208)],
     chest: p(160, 128),
+    fire: p(60, 208),
   },
   pillars: {
     name: "Piliers",
@@ -82,6 +87,7 @@ const LAYOUTS = {
     gems: [p(96, 128), p(96, 288), p(48, 208)],
     spawns: [p(144, 208), p(48, 60), p(144, 360), p(40, 360)],
     chest: p(40, 40),
+    fire: p(96, 208),
   },
   // Deux murs en travers, chacun percé d'un seul passage au centre : pour
   // traverser de haut en bas, on ne peut pas éviter ce qui s'y trouve. Le
@@ -97,6 +103,7 @@ const LAYOUTS = {
     gems: [p(40, 90), p(152, 330), p(96, 208)],
     spawns: [p(40, 60), p(152, 60), p(40, 360), p(152, 360)],
     chest: p(152, 90),
+    fire: p(56, 208),
   },
   // Un bloc central et quatre autour : on circule par les bords.
   crossing: {
@@ -110,6 +117,7 @@ const LAYOUTS = {
     gems: [p(96, 150), p(96, 266), p(28, 208)],
     spawns: [p(40, 60), p(152, 60), p(40, 360), p(152, 360)],
     chest: p(30, 40),
+    fire: p(96, 96),
   },
   // Des pierres d'une tuile éparpillées : beaucoup de recoins pour se faire
   // coincer.
@@ -125,36 +133,27 @@ const LAYOUTS = {
     gems: [p(40, 120), p(152, 240), p(96, 208)],
     spawns: [p(96, 60), p(40, 300), p(152, 120), p(120, 380)],
     chest: p(40, 390),
+    fire: p(120, 210),
   },
-  // Un camp : pas d'obstacle, pas d'ennemi, un feu au centre. S'en approcher
-  // met le butin à l'abri et soigne.
-  camp: {
-    name: "Camp avancé",
-    ground: "#221c14",
-    camp: true,
-    obstacles: [],
-    gems: [],
-    spawns: [],
-    fire: p(96, 208),
-  },
+  // Le point de départ : pas d'ennemi, pas de feu, un portail pour lancer une
+  // nouvelle expédition quand on le décide. Le portail est hors des couloirs
+  // des portes, pour qu'on ne le prenne pas par mégarde en traversant.
   base: {
     name: "Camp de base",
     ground: "#221c14",
-    camp: true,
-    // Y rentrer termine l'expédition : une nouvelle carte est tirée.
-    base: true,
+    safe: true,
     obstacles: [],
     gems: [],
     spawns: [],
-    fire: p(96, 208),
+    portal: p(40, 100),
   },
 };
 
 // Les zones que le générateur peut tirer pour un écran ordinaire.
-const WILD_LAYOUTS = Object.keys(LAYOUTS).filter((k) => !LAYOUTS[k].camp);
+const WILD_LAYOUTS = Object.keys(LAYOUTS).filter((k) => !LAYOUTS[k].safe);
 
-// La carte : quelle zone se trouve à quelles coordonnées, et quelles portes
-// la relient à ses voisines.
+// La carte : quelle zone se trouve à quelles coordonnées, quelles portes la
+// relient à ses voisines, et où brûle le camp.
 //
 // Elle ne fabrique rien : elle sert la carte que Generator lui a confiée par
 // load(). World ne connaît de la carte que ces méthodes, et ne sait donc pas
@@ -166,6 +165,7 @@ const ZoneRegistry = (() => {
 
   return {
     load(m) { map = m; },
+    get map() { return map; },
     get seed() { return map.seed; },
     get base() { return map.base; },
     get width() { return map.size; },
@@ -179,6 +179,9 @@ const ZoneRegistry = (() => {
     exits(cx, cy) { return cell(cx, cy).links; },
     // L'objet caché dans le coffre de cet écran, ou null.
     chest(cx, cy) { return cell(cx, cy).chest; },
+    // Le camp brûle-t-il dans cet écran ? Il n'y en a qu'un à la fois.
+    isCamp(cx, cy) { return !!map.camp && map.camp.x === cx && map.camp.y === cy; },
+    get camp() { return map.camp; },
     // Tous les écrans, pour la mini-carte.
     cells() { return map.cells.values(); },
   };

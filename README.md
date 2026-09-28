@@ -28,8 +28,14 @@ graphismes.
 
 - **Une nouvelle carte à chaque expédition.** Environ 26 écrans poussent
   depuis le camp de base, au centre d'une grille de 7 x 7, reliés par des
-  portes comme un labyrinthe avec quelques boucles. Deux camps avancés : un
-  tout au bout, un à mi-chemin. Sept décors, dont certains réservés au loin.
+  portes comme un labyrinthe avec quelques boucles. Sept décors, dont
+  certains réservés au loin.
+- **Un seul camp à la fois, qu'il faut trouver.** Il brûle dans un écran
+  quelconque, à deux à quatre écrans du départ pour le premier, et n'apparaît
+  sur la mini-carte qu'une fois vu. S'en approcher met le butin porté à
+  l'abri et rend les cœurs ; puis le feu s'éteint et un autre s'allume
+  ailleurs, à au moins trois écrans. Passer devant sans rien à y faire ne le
+  gaspille pas. Aucun ennemi autour du feu.
 - **Des gemmes** dont la valeur double à chaque écran d'éloignement du camp
   de base, compté par le plus court chemin : 1, 2, 4, 8... Elles s'ajoutent
   au butin porté, affiché en haut à droite.
@@ -62,14 +68,17 @@ graphismes.
   joueur. Un ennemi touché est repoussé et étourdi ; tué, il lâche une gemme
   de la valeur de la zone, et reste mort jusqu'à la fin de l'expédition.
   Au-delà de trois écrans, les ennemis encaissent deux coups.
-- **Trois cœurs.** Mourir fait perdre le butin porté et tout l'équipement,
-  et ramène au camp de base sur une nouvelle carte.
-- **Les feux de camp** mettent le butin porté à l'abri dans la banque et
-  rendent les cœurs. Rentrer au camp de base après avoir pris quoi que ce
-  soit au monde termine l'expédition : nouvelle carte, mains vides.
+- **Trois cœurs.** On garde son équipement tant qu'on est en vie. Mourir fait
+  perdre le butin porté et tout l'équipement, et ramène au camp de base sur
+  une nouvelle carte.
+- **Le camp de base** n'est qu'un point de départ, sans feu. Son portail
+  lance une nouvelle expédition quand on a vidé la carte : on y garde le
+  butin porté, pas l'équipement, sinon on accumulerait les artefacts de
+  carte en carte.
 - **La banque** est conservée d'une partie à l'autre, dans le navigateur.
-- **Une mini-carte** en haut à droite : écrans visités et leurs portes,
-  écrans entrevus derrière, camps, position.
+- **Une mini-carte** en haut à droite : camp de base, écrans visités et leurs
+  portes, écrans entrevus derrière, camp s'il a été vu, coffres non ouverts,
+  position.
 
 Les graphismes sont des formes de couleur, en attendant les vrais.
 

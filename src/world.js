@@ -11,15 +11,16 @@
 //
 // La boucle du stop ou encore :
 // - le joueur part les mains vides ; il trouve armes et artefacts en fouillant
-//   les coffres de la carte, et les perd à la fin de l'expédition ;
+//   les coffres de la carte, et les garde tant qu'il est en vie ;
 // - chaque gemme ramassée s'ajoute au butin porté, et vaut le double à
 //   chaque écran d'éloignement du camp de base ;
-// - s'approcher d'un feu de camp met le butin porté à l'abri dans la banque
-//   (Save) et rend tous les cœurs ;
+// - un seul camp brûle sur la carte, quelque part : il faut le trouver. S'en
+//   approcher met le butin porté à l'abri dans la banque (Save) et rend les
+//   cœurs ; puis le feu s'éteint et un autre camp s'allume ailleurs ;
 // - mourir fait perdre le butin porté et l'équipement, et ramène au camp de
 //   base sur une nouvelle carte ;
-// - rentrer au camp de base termine l'expédition de la même façon, le butin
-//   en moins puisqu'il vient d'être mis à l'abri ;
+// - le portail du camp de base lance une nouvelle expédition quand on le
+//   décide (carte vidée) : on garde le butin porté, pas l'équipement ;
 // - un ennemi tué lâche une gemme de la valeur de la zone, et reste mort
 //   jusqu'à la fin de l'expédition, pour qu'on ne puisse pas en faire
 //   réapparaître en repassant une porte.
@@ -36,6 +37,10 @@ const World = (() => {
     enemies: [],
     // Le coffre de la zone s'il n'a pas été ouvert : {x, y, size, item}.
     chest: null,
+    // Le feu, si le camp brûle dans cette zone, et le portail du camp de
+    // base : {x, y} ou null.
+    fire: null,
+    portal: null,
     // Les objets posés au sol dans cette zone (armes lâchées) : la liste est
     // celle de run.drops, donc ils y restent quand on revient.
     drops: [],
@@ -82,9 +87,10 @@ const World = (() => {
     banner: null,
     // Petits textes qui s'envolent au ramassage : {x, y, text, time}.
     popups: [],
-    // Le joueur est-il déjà près du feu ? Le repos ne se déclenche qu'en
-    // arrivant, pas à chaque image passée à côté.
+    // Le joueur est-il déjà près du feu, du portail ? L'un et l'autre ne se
+    // déclenchent qu'en arrivant, pas à chaque image passée à côté.
     atFire: false,
+    atPortal: false,
   };
 
   const zoneKey = () => `${state.coords.x},${state.coords.y}`;
@@ -92,7 +98,7 @@ const World = (() => {
 
   // Tire une nouvelle carte, et remet l'expédition à zéro : plus d'arme, plus
   // d'artefact, plus rien de ce qui concernait l'ancienne carte. Le butin
-  // porté n'est pas touché ici : la mort le perd, le camp le met à l'abri.
+  // porté n'est pas touché ici : la mort le perd, le portail le garde.
   function newMap(seed) {
     ZoneRegistry.load(Generator.generate(seed ?? Generator.freshSeed()));
     const r = state.run;
@@ -133,7 +139,11 @@ const World = (() => {
     state.solids = [...borderWalls(ZoneRegistry.exits(cx, cy)), ...zone.obstacles];
     state.nav = Nav.build(state.solids, Enemies.SIZE);
     state.visited.add(`${cx},${cy}`);
+    const campHere = ZoneRegistry.isCamp(cx, cy);
+    state.fire = campHere ? zone.fire : null;
+    state.portal = zone.portal || null;
     state.atFire = false;
+    state.atPortal = false;
     state.popups = [];
 
     // Coups et projectiles ne suivent pas le joueur d'un écran à l'autre : le
@@ -161,7 +171,9 @@ const World = (() => {
     // La composition de la zone est tirée avec sa propre graine : la même à
     // chaque retour. Les ennemis déjà tués sont retirés du début de la liste,
     // Traqueur compris.
-    const planned = zone.camp ? 0 : table[Math.min(distance, table.length - 1)];
+    // Aucun ennemi au camp de base ni autour du feu. Le camp éteint, la zone
+    // retrouve les siens à la visite suivante.
+    const planned = zone.safe || campHere ? 0 : table[Math.min(distance, table.length - 1)];
     const rng = makeRandom(deriveSeed(ZoneRegistry.seed, cx, cy));
     const roster = Enemies.roster(planned, distance, rng)
       .slice(state.run.killed.get(key) || 0);
@@ -216,6 +228,7 @@ const World = (() => {
     openChest();
     pickUpDrops();
     restAtFire();
+    enterPortal();
 
     for (const e of state.enemies) {
       Enemies.step(e, p, state.enemies, dt, state.nav, state.solids);
@@ -303,7 +316,7 @@ const World = (() => {
   }
 
   function restAtFire() {
-    const fire = state.zone.fire;
+    const fire = state.fire;
     if (!fire) return;
     const p = state.player;
     const near = Math.hypot(p.x - fire.x, p.y - fire.y) < Config.CAMP_RADIUS;
@@ -311,32 +324,42 @@ const World = (() => {
     state.atFire = near;
   }
 
+  // Le camp ne sert qu'une fois : s'il y a du butin à mettre à l'abri ou des
+  // cœurs à rendre, il le fait, puis il s'éteint et un autre s'allume
+  // ailleurs. Sinon, il attend : on ne le gaspille pas en passant devant.
   function rest() {
     const p = state.player;
-    const r = state.run;
-    const carried = r.carried;
+    const carried = state.run.carried;
     const healed = p.hp < p.maxHp;
-    p.hp = p.maxHp;
+    if (carried === 0 && !healed) return;
 
+    p.hp = p.maxHp;
     if (carried > 0) {
       Save.deposit(carried);
-      r.carried = 0;
-      showBanner("Butin à l'abri", `+${carried}  ·  banque ${Save.data.bank}`);
-    } else if (healed) {
-      showBanner("Repos", "cœurs rendus");
+      state.run.carried = 0;
     }
+    Generator.moveCamp(ZoneRegistry.map);
+    state.fire = null;
+    showBanner(carried > 0 ? `+${carried} à l'abri` : "Cœurs rendus",
+               "le feu s'éteint, un autre s'allume ailleurs");
+  }
 
-    // Au camp de base, l'expédition est terminée dès qu'on a pris quelque
-    // chose au monde : la carte change et l'équipement est perdu. Le joueur
-    // reste où il est, au coin du feu, et repart les mains vides.
-    const tookSomething = r.taken.size > 0 || r.killed.size > 0 || r.opened.size > 0;
-    if (state.zone.base && tookSomething) {
+  // Le portail du camp de base : une nouvelle carte, quand on a vidé
+  // celle-ci. Le butin porté suit, encore à mettre à l'abri ; l'équipement
+  // reste derrière, sinon on accumulerait les artefacts de carte en carte.
+  function enterPortal() {
+    const portal = state.portal;
+    if (!portal) return;
+    const p = state.player;
+    const near = Math.hypot(p.x - portal.x, p.y - portal.y) < Config.PORTAL_RADIUS;
+    if (near && !state.atPortal) {
       newMap();
-      p.hp = p.maxHp;
       enterZone(ZoneRegistry.base.x, ZoneRegistry.base.y);
-      state.atFire = true;
-      if (carried === 0) showBanner("Nouvelle expédition", "nouvelle carte, mains vides");
+      state.atPortal = true;
+      showBanner("Nouvelle expédition", "nouvelle carte, mains vides");
+      return;
     }
+    state.atPortal = near;
   }
 
   function hurt(enemy) {
