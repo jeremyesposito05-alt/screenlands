@@ -1,42 +1,21 @@
 "use strict";
 
-// Le point d'entrée : branche l'entrée, le monde et le rendu, fait tourner
-// la boucle, et tient à jour les deux boutons posés par-dessus le jeu.
+// Le point d'entrée : branche l'entrée, le monde, le rendu et les menus, et
+// fait tourner la boucle.
 //
 // La physique avance à pas fixe (Config.STEP) quel que soit le rythme de
 // l'écran, pour que le jeu se comporte pareil sur un PC à 60 Hz et sur un
-// iPhone à 120 Hz. Le rendu, lui, suit l'écran.
+// iPhone à 120 Hz. Le rendu, lui, suit l'écran. Tant qu'un menu est ouvert,
+// le jeu ne bouge plus mais reste dessiné derrière.
 
 (() => {
   const canvas = document.getElementById("game");
   const attackButton = document.getElementById("attack");
-  const controlsButton = document.getElementById("controls");
-  Input.init(document.getElementById("joystick"), attackButton, [controlsButton]);
+  Input.init(document.getElementById("joystick"), attackButton,
+             [document.getElementById("overlay"), document.getElementById("pause")]);
   Render.init(canvas);
   World.newExpedition();
-
-  // --- Mode de commande ---
-  const MODES = {
-    swipe: {
-      label: "Commandes : glisser",
-      help: ["Glisse pour courir", "touche : frapper · maintiens : stop"],
-    },
-    stick: {
-      label: "Commandes : joystick",
-      help: ["Joystick sous le pouce", "bouton à droite pour frapper"],
-    },
-  };
-  function applyMode(mode, explain) {
-    Input.setMode(mode);
-    Save.setControls(mode);
-    controlsButton.textContent = MODES[mode].label;
-    shownWeapon = undefined;
-    if (explain) World.say(...MODES[mode].help, 4);
-  }
-  controlsButton.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    applyMode(Input.mode === "swipe" ? "stick" : "swipe", true);
-  });
+  Menu.init();
 
   // --- Bouton d'attaque ---
   // En mode joystick seulement (en mode glisser, on frappe en touchant
@@ -47,8 +26,7 @@
   attackButton.appendChild(buttonIcon);
   let shownWeapon;
   function syncButtons() {
-    controlsButton.hidden = !World.state.zone.safe || World.state.phase === "dead";
-    const weapon = Input.mode === "stick" ? World.state.run.weapon : null;
+    const weapon = Input.mode === "stick" && !Menu.isOpen() ? World.state.run.weapon : null;
     if (weapon === shownWeapon) return;
     shownWeapon = weapon;
     attackButton.hidden = !weapon;
@@ -67,19 +45,23 @@
   function frame(now) {
     const dt = Math.min((now - last) / 1000, MAX_FRAME);
     last = now;
-    acc += dt;
-    while (acc >= Config.STEP) {
-      const intent = Input.intent();
-      World.step(Config.STEP, intent, Input.takeAttack());
-      if (intent.accepted) Input.acceptTurn();
-      acc -= Config.STEP;
+    if (Menu.isOpen()) {
+      acc = 0;
+    } else {
+      acc += dt;
+      while (acc >= Config.STEP) {
+        const intent = Input.intent();
+        World.step(Config.STEP, intent, Input.takeAttack());
+        if (intent.accepted) Input.acceptTurn();
+        acc -= Config.STEP;
+      }
     }
     // À la mort, la course s'arrête : on ne repart pas tout seul du camp.
     if (World.state.phase !== phase) {
       phase = World.state.phase;
       if (phase === "dead") Input.stop();
     }
-    Render.draw(World.state, dt);
+    Render.draw(World.state, Menu.isOpen() ? 0 : dt);
     syncButtons();
     requestAnimationFrame(frame);
   }
@@ -95,10 +77,8 @@
   }
   addEventListener("resize", fit);
   fit();
-
-  applyMode(Save.data.controls in MODES ? Save.data.controls : "swipe", true);
   syncButtons();
 
   // Accès pour les tests et le débogage depuis la console.
-  window.Screenlands = { World, Input, Render, Config, Save, ZoneRegistry, Generator, Enemies, Weapons, syncButtons, applyMode };
+  window.Screenlands = { World, Input, Render, Config, Save, ZoneRegistry, Generator, Enemies, Weapons, Menu, syncButtons };
 })();

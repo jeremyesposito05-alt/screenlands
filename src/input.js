@@ -140,7 +140,11 @@ const Input = (() => {
 
   const isIgnored = (target) => ignored.some((el) => el && el.contains(target));
 
+  // Un doigt posé sur un menu ou un bouton n'est pas pour le jeu : on le
+  // laisse au navigateur, pour que les boutons répondent et que le panneau
+  // du bac à sable défile.
   function onTouchStart(e) {
+    if (isIgnored(e.target)) return;
     e.preventDefault();
     for (const t of e.changedTouches) {
       if (isIgnored(t.target)) continue;
@@ -159,6 +163,7 @@ const Input = (() => {
   }
 
   function onTouchMove(e) {
+    if (isIgnored(e.target)) return;
     e.preventDefault();
     for (const t of e.changedTouches) {
       if (mode === "swipe") swipeMove(t);

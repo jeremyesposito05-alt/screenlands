@@ -116,6 +116,9 @@ const World = (() => {
     // entrée : {at: {x, y}, time} ou null.
     hunter: null,
     hunterComing: null,
+    // Mode test (voir sandbox) : banque intacte ; `god` rend invincible.
+    sandbox: false,
+    god: false,
   };
 
   const zoneKey = () => `${state.coords.x},${state.coords.y}`;
@@ -600,7 +603,9 @@ const World = (() => {
 
     p.hp = p.maxHp;
     if (carried > 0) {
-      Save.deposit(carried);
+      // Au bac à sable, le butin ne compte pas : la vraie banque reste
+      // intacte.
+      if (!state.sandbox) Save.deposit(carried);
       state.run.carried = 0;
     }
     Generator.moveCamp(ZoneRegistry.map);
@@ -639,6 +644,8 @@ const World = (() => {
 
   function hurt(enemy) {
     const p = state.player;
+    // Invincible au bac à sable : rien ne passe, pas même le Chasseur.
+    if (state.god) return;
     // L'Égide prend le coup à la place du joueur.
     if (Powers.absorb(state, state.run.powers)) {
       p.invuln = 0.6;
@@ -745,5 +752,98 @@ const World = (() => {
     state.popups = state.popups.filter((pop) => pop.time > 0);
   }
 
-  return { state, newExpedition, gemValue, step, has, threatLevel, say: showBanner };
+  // --- Bac à sable ---
+  // Les outils du mode test : tout essayer sans avoir à le trouver. Ils
+  // passent par les mêmes règles que le jeu (take, kill, enterZone), pour que
+  // ce qu'on teste soit bien ce qu'on joue.
+  const sandbox = {
+    // Active ou quitte le mode test : invincible par défaut, banque intacte.
+    enable(on) {
+      state.sandbox = on;
+      state.god = on;
+    },
+    setGod(on) { state.god = on; },
+    give(key) { take(key); },
+    setPower(key, level) {
+      if (level <= 0) delete state.run.powers[key];
+      else state.run.powers[key] = Math.min(Powers.MAX_LEVEL, level);
+    },
+    toggleRelic(key) {
+      const r = state.run.relics, i = r.indexOf(key);
+      if (i >= 0) r.splice(i, 1);
+      else r.push(key);
+      recomputeStats();
+    },
+    clearGear() {
+      const r = state.run;
+      r.weapon = null;
+      r.artifacts = [];
+      r.powers = {};
+      r.relics = [];
+      recomputeStats();
+    },
+    heal() { state.player.hp = state.player.maxHp; },
+    // Un ennemi au point d'apparition le plus éloigné du joueur, réveillé
+    // tout de suite.
+    spawnEnemy(type, elite) {
+      if (type === "hunter") {
+        state.hunterComing = { at: nearestDoor() || { x: 96, y: 30 }, time: 0.5 };
+        return;
+      }
+      const p = state.player;
+      const spots = (state.zone.spawns.length ? state.zone.spawns : LAYOUTS.clearing.spawns)
+        .slice().sort((a, b) => Math.hypot(b.x - p.x, b.y - p.y) - Math.hypot(a.x - p.x, a.y - p.y));
+      const at = spots[state.enemies.length % spots.length];
+      const e = Enemies.spawn(type, at, Math.max(1, state.distance), {
+        elite, speed: Config.THREAT_SPEED * threatLevel(),
+      });
+      e.wake = 0.3;
+      state.enemies.push(e);
+    },
+    killAll() {
+      for (const e of state.enemies) kill(e);
+      state.enemies = [];
+      state.hunter = null;
+      state.hunterComing = null;
+    },
+    setThreat(level) {
+      state.run.threat = level * Config.THREAT_STEP + 1;
+      state.threatLevel = level;
+      if (level < Config.THREAT_MAX) {
+        state.hunter = null;
+        state.hunterComing = null;
+      } else if (!state.hunter && !state.hunterComing && !state.zone.safe && !state.fire) {
+        state.hunterComing = { at: nearestDoor(), time: Config.HUNTER_DELAY };
+      }
+    },
+    freezeThreat(on) { state.run.threatFrozen = on ? Infinity : 0; },
+    // Un coffre juste devant le joueur, pour tester les tirages.
+    spawnChest(tier) {
+      const p = state.player;
+      const m = Config.WALL + 8;
+      const x = Math.min(Math.max(p.x + p.facing.x * 22, m), Config.ZONE_W - m);
+      const y = Math.min(Math.max(p.y + p.facing.y * 22, m), Config.ZONE_H - m);
+      state.drops.push({ kind: "chest", tier, item: null, x, y, size: 12 });
+    },
+    goToCamp() {
+      const c = ZoneRegistry.camp;
+      const p = state.player;
+      p.x = Config.ZONE_W / 2;
+      p.y = Config.ZONE_H / 2 + 40;
+      enterZone(c.x, c.y);
+    },
+    newMap() {
+      const r = state.run;
+      const keep = { weapon: r.weapon, artifacts: r.artifacts, powers: r.powers, relics: r.relics };
+      newMap();
+      Object.assign(r, keep);
+      recomputeStats();
+      const p = state.player;
+      p.x = Config.ZONE_W / 2;
+      p.y = Config.ZONE_H / 2 + 56;
+      enterZone(ZoneRegistry.base.x, ZoneRegistry.base.y);
+    },
+  };
+
+  return { state, newExpedition, gemValue, step, has, threatLevel, say: showBanner, sandbox };
 })();

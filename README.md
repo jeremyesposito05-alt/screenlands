@@ -119,13 +119,30 @@ Chaque système sera validé avant d'ajouter le suivant.
 
 Tous les chiffres d'équilibrage sont regroupés en bas de `src/config.js`.
 
+## Menus et bac à sable
+
+Le jeu s'ouvre sur un **menu principal** : Jouer, Bac à sable, choix des
+commandes, banque et meilleur butin. En jeu, le bouton **II** en haut à
+gauche met en pause : reprendre, changer de commandes, abandonner
+l'expédition (avec confirmation). Le jeu se met aussi en pause tout seul
+quand le téléphone passe à autre chose.
+
+Le **bac à sable** sert à tout essayer sans avoir à le trouver. On y est
+invincible, et ce qu'on y gagne ne va pas à la banque. Le bouton 🛠 ouvre
+les outils : invincibilité, soin, n'importe quelle arme, le niveau de chaque
+pouvoir, bonus et reliques à volonté, apparition de chaque ennemi (en élite
+si on veut) et du Chasseur, « tout tuer », cran de menace et menace figée,
+un coffre de chaque rareté, aller au camp, nouvelle carte. Les outils
+passent par les mêmes règles que le jeu : ce qu'on y teste est ce qu'on
+joue.
+
 ## Sur iPhone
 
 Ouvrir le lien dans Safari, puis `Partager > Sur l'écran d'accueil`. Lancé
 depuis l'icône, le jeu s'ouvre en plein écran, sans la barre de Safari.
 
-Deux modes de commande, au choix, par le bouton qui apparaît au camp de
-base (le choix est retenu) :
+Deux modes de commande, au choix, dans le menu principal ou la pause (le
+choix est retenu) :
 
 - **Glisser** (par défaut). Le personnage court tout seul dans la dernière
   direction donnée et s'arrête contre un mur, à la manière de *Tomb of the
@@ -180,6 +197,7 @@ src/input.js         clavier et tactile : modes glisser et joystick
 src/weapons.js       les armes en action : coups de mêlée et projectiles
 src/world.js         l'expédition et ses règles : gemmes, coups, camps, transitions
 src/render.js        tout ce qui dessine, et rien d'autre
+src/menu.js          menu principal, pause et outils du bac à sable
 src/main.js          la boucle de jeu
 tools/serve.pl       serveur local pour les tests
 godot/               l'ancien prototype Godot, archivé
