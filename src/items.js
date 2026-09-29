@@ -21,7 +21,8 @@
 // Les effets sur les caractéristiques sont décrits par `mods`, que Stats
 // additionne : speed et damage en fraction (+0,1 = +10 %), haste pour la
 // cadence, area pour la portée, magnet en pixels, luck en points, maxHp en
-// cœurs, gemMul pour la valeur des gemmes.
+// cœurs, gemMul pour la valeur des gemmes, weaponDamage pour les seuls
+// dégâts de l'arme, allyMax pour la longueur de la file de compagnons.
 
 const ITEMS = {
   // --- Armes ---
@@ -91,7 +92,12 @@ const ITEMS = {
   // --- Reliques (coffres légendaires), uniques ---
   phoenix: { name: "Cœur de phénix", hint: "tu reviendras une fois de la mort", type: "relic" },
   hourglass: { name: "Sablier", hint: "menace −2 min, puis figée 1 min", type: "relic" },
-  crown: { name: "Couronne d'avarice", hint: "gemmes +50 %", type: "relic", mods: { gemMul: 0.5 } },
+  crown: { name: "Couronne d'avarice", hint: "toutes les gemmes valent double", type: "relic", mods: { gemMul: 1 } },
+  // Deux compagnons tout de suite, et deux places de plus dans la file.
+  banner: { name: "Étendard du roi", hint: "2 compagnons, file de 6", type: "relic", mods: { allyMax: 2 } },
+  // L'arme en main frappe deux fois plus fort (pas les pouvoirs ni les
+  // compagnons : c'est la relique de ceux qui jouent au contact).
+  runeBlade: { name: "Lame runique", hint: "dégâts de l'arme ×2", type: "relic", mods: { weaponDamage: 1 } },
 };
 
 // Ce qui peut sortir de chaque sorte de coffre, et où les coffres se
@@ -110,7 +116,7 @@ const LOOT = {
   rareArtifacts: ["heart", "boots", "lantern"],
   powers: ["fireTrail", "orb", "lightning", "frost", "aegis"],
   allies: ["archer", "warrior"],
-  relics: ["phoenix", "hourglass", "crown"],
+  relics: ["phoenix", "hourglass", "crown", "banner", "runeBlade"],
   weapons: ["sword", "spear", "bow", "boomerang"],
 
   TIERS: ["common", "rare", "epic", "legendary"],

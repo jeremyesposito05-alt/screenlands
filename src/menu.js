@@ -200,7 +200,7 @@ const Menu = (() => {
       <section><h3>Pouvoirs</h3>${powers}</section>
       <section><h3>Bonus et artefacts</h3><div class="grid">${boosts}</div></section>
       <section><h3>Reliques</h3><div class="grid">${relics}</div></section>
-      <section><h3>Compagnons (${r.allies.length}/${Allies.MAX})</h3><div class="grid">${allies}
+      <section><h3>Compagnons (${r.allies.length}/${Allies.maxFor(r)})</h3><div class="grid">${allies}
         ${btn("clearAllies", "Renvoyer")}
       </div><p class="note dim">Un coup reçu fait tomber le dernier de la file au lieu d'un cœur ; repasse dessus pour le relever.</p></section>
       <section><h3>Ennemis</h3><div class="grid">

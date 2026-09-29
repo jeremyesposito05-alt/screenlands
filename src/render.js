@@ -339,7 +339,7 @@ const Render = (() => {
     const level = World.threatLevel();
     const progress = level >= max ? 1
       : (state.run.threat % Config.THREAT_STEP) / Config.THREAT_STEP;
-    const x0 = 66, w = 60, y = 5, h = 5;
+    const w = 60, x0 = Config.ZONE_W / 2 - w / 2, y = 5, h = 5;
     const seg = w / max;
     ctx.fillStyle = "rgba(8, 10, 14, 0.6)";
     ctx.fillRect(x0 - 1, y - 1, w + 2, h + 2);
@@ -708,6 +708,29 @@ const Render = (() => {
         ctx.fillStyle = STYLE.heart;
         ctx.fillRect(-0.75, 0.5, 1.5, 1.5);
         break;
+      case "banner":
+        ctx.fillStyle = STYLE.chestLid;
+        ctx.fillRect(-3.5, -5, 1.2, 10);
+        ctx.fillStyle = "#4fa3ff";
+        ctx.beginPath();
+        ctx.moveTo(-2.3, -5); ctx.lineTo(4.5, -5); ctx.lineTo(3, -2.5); ctx.lineTo(4.5, 0);
+        ctx.lineTo(-2.3, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#ffc93d";
+        ctx.fillRect(0, -3.5, 1.5, 1.5);
+        break;
+      case "runeBlade":
+        ctx.fillStyle = "#9fdcff";
+        ctx.fillRect(-1, -5.5, 2, 8);
+        ctx.fillStyle = "#b36bff";
+        ctx.fillRect(-0.5, -4, 1, 1);
+        ctx.fillRect(-0.5, -1.5, 1, 1);
+        ctx.fillStyle = "#ffc93d";
+        ctx.fillRect(-3, 2.5, 6, 1.5);
+        ctx.fillStyle = STYLE.chestLid;
+        ctx.fillRect(-0.75, 4, 1.5, 2);
+        break;
     }
     ctx.restore();
   }
@@ -784,8 +807,8 @@ const Render = (() => {
     }
     if (state.run.weapon) drawIcon(state.run.weapon, hx + 5, 8);
 
-    drawGem(132, 8, 7);
-    text(`${state.run.carried}`, 138, 4, STYLE.text, "left");
+    drawGem(Config.ZONE_W - 60, 8, 7);
+    text(`${state.run.carried}`, Config.ZONE_W - 54, 4, STYLE.text, "left");
     if (!state.zone.safe && !state.fire) {
       text(`×${World.gemValue(state.distance)}`, Config.ZONE_W - 4, 4, STYLE.dim, "right");
     }

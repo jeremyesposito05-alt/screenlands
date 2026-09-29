@@ -7,14 +7,28 @@
 // et les portes. Les chiffres d'équilibrage sont regroupés en bas : ce sont
 // eux qu'on ajuste après avoir joué.
 
+// La largeur d'une zone s'adapte à l'écran, pour le remplir sans bandes sur
+// les côtés : la hauteur est fixe (26 tuiles), la largeur suit les
+// proportions de l'espace disponible, mesurées au lancement. Les décors sont
+// dessinés pour la largeur de base, DESIGN_W, et centrés (voir zones.js) :
+// un écran plus large a simplement plus de sol sur les côtés.
+const SCREEN_W = (() => {
+  const DESIGN_W = 192, H = 416, MAX_W = 288;
+  const stage = document.getElementById("stage");
+  const box = stage ? stage.getBoundingClientRect() : null;
+  if (!box || !box.width || !box.height) return DESIGN_W;
+  const w = Math.round((H * box.width) / box.height / 2) * 2;
+  return Math.min(MAX_W, Math.max(DESIGN_W, w));
+})();
+
 const Config = Object.freeze({
   TILE: 16,
 
-  // 12 x 26 tuiles = 192 x 416 px, soit un ratio 9:19.5 (iPhone portrait
-  // moderne). Étroit et haut : c'est la contrainte du format.
-  ZONE_W_TILES: 12,
+  // 26 tuiles de 16 px de haut ; la largeur vaut au moins 12 tuiles (192 px,
+  // un ratio 9:19.5 d'iPhone), davantage sur un écran plus large.
+  DESIGN_W: 192,
   ZONE_H_TILES: 26,
-  get ZONE_W() { return this.ZONE_W_TILES * this.TILE; },
+  ZONE_W: SCREEN_W,
   get ZONE_H() { return this.ZONE_H_TILES * this.TILE; },
 
   // Épaisseur du mur qui ceinture une zone, et largeur de la porte centrale

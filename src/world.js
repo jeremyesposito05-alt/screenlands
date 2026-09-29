@@ -674,6 +674,11 @@ const World = (() => {
             state.hunterComing = null;
           }
         }
+        // L'Étendard rallie tout de suite un Archer et un Guerrier.
+        if (key === "banner") {
+          Allies.add(state, "archer");
+          Allies.add(state, "warrior");
+        }
         break;
       case "consumable":
         if (key === "flask") p.hp = Math.min(p.maxHp, p.hp + 1);
@@ -913,7 +918,7 @@ const World = (() => {
     // tout de suite.
     spawnEnemy(type, elite) {
       if (type === "hunter") {
-        state.hunterComing = { at: nearestDoor() || { x: 96, y: 30 }, time: 0.5 };
+        state.hunterComing = { at: nearestDoor() || { x: Config.ZONE_W / 2, y: 30 }, time: 0.5 };
         return;
       }
       const p = state.player;

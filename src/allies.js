@@ -14,19 +14,22 @@
 // (Stats). Comme Powers, ce module blesse par `api.damage`, fourni par World.
 
 const Allies = (() => {
-  const MAX = 4;
+  // La file compte BASE_MAX compagnons, davantage avec l'Étendard du roi
+  // (voir maxFor) ; LONGEST est la plus longue possible.
+  const BASE_MAX = 4;
+  const LONGEST = 6;
   // Espacement dans la file, en pixels de trajectoire, et finesse de
   // l'enregistrement de cette trajectoire.
   const SPACING = 12;
   const STEP = 2;
   // Combien de temps un compagnon tombé attend qu'on le relève.
-  const DOWN_TIME = 3;
+  const DOWN_TIME = 4;
 
   const TYPES = {
     // Tire sur l'ennemi le plus proche.
-    archer: { name: "Archer", cooldown: 0.9, range: 110, damage: 0.6, arrowSpeed: 200 },
+    archer: { name: "Archer", cooldown: 0.8, range: 110, damage: 0.75, arrowSpeed: 200 },
     // Frappe ce qui s'approche de lui.
-    warrior: { name: "Guerrier", cooldown: 0.7, reach: 16, damage: 0.8, knockback: 10, targets: 2 },
+    warrior: { name: "Guerrier", cooldown: 0.7, reach: 16, damage: 1, knockback: 10, targets: 2 },
   };
 
   const PER = SPACING / STEP;
@@ -36,7 +39,7 @@ const Allies = (() => {
   // tombés, les flèches en vol et les coups en cours.
   function clearZone(state) {
     const p = state.player;
-    state.trail = Array.from({ length: MAX * PER + 2 }, () => ({ x: p.x, y: p.y }));
+    state.trail = Array.from({ length: LONGEST * PER + 2 }, () => ({ x: p.x, y: p.y }));
     state.downed = [];
     state.allyShots = [];
     state.slashes = [];
@@ -46,8 +49,13 @@ const Allies = (() => {
     }
   }
 
+  // Combien de compagnons tiennent dans la file de cette expédition.
+  function maxFor(run) {
+    return BASE_MAX + Stats.compute(run).allyMax;
+  }
+
   function add(state, type) {
-    if (state.run.allies.length >= MAX) return false;
+    if (state.run.allies.length >= maxFor(state.run)) return false;
     const p = state.player;
     state.run.allies.push({ type, x: p.x, y: p.y, cooldown: 0 });
     return true;
@@ -70,7 +78,7 @@ const Allies = (() => {
       t.push(last);
       d = Math.hypot(p.x - last.x, p.y - last.y);
     }
-    const keep = MAX * PER + 2;
+    const keep = LONGEST * PER + 2;
     if (t.length > keep) t.splice(0, t.length - keep);
     state.run.allies.forEach((a, i) => {
       const pt = t[Math.max(0, t.length - 1 - (i + 1) * PER)];
@@ -161,7 +169,7 @@ const Allies = (() => {
     state.downed = state.downed.filter((d) => {
       d.time -= dt;
       if (d.time <= 0) return false;
-      if (Math.hypot(d.x - p.x, d.y - p.y) < (p.size + 9) / 2 && state.run.allies.length < MAX) {
+      if (Math.hypot(d.x - p.x, d.y - p.y) < (p.size + 9) / 2 && state.run.allies.length < maxFor(state.run)) {
         state.run.allies.push({ type: d.type, x: d.x, y: d.y, cooldown: 0.3 });
         state.popups.push({ x: d.x, y: d.y - 4, text: "relevé !", time: 0.8 });
         return false;
@@ -170,5 +178,5 @@ const Allies = (() => {
     });
   }
 
-  return { MAX, TYPES, DOWN_TIME, clearZone, add, update, absorb };
+  return { BASE_MAX, TYPES, DOWN_TIME, maxFor, clearZone, add, update, absorb };
 })();

@@ -12,7 +12,7 @@
 // - rare : un pouvoir nouveau ou son niveau suivant, un compagnon s'il reste
 //   de la place dans la file, un artefact, ou une arme qu'on n'a pas en main ;
 // - épique : un pouvoir monté de deux niveaux, et un bonus en prime ;
-// - légendaire : une relique qu'on n'a pas.
+// - légendaire : une relique qu'on n'a pas, et un objet rare en prime.
 // Quand une rareté n'a plus rien à offrir, on descend d'un cran.
 
 const Loot = (() => {
@@ -49,8 +49,10 @@ const Loot = (() => {
     const common = () => pick(LOOT.commons);
 
     switch (tier) {
+      // Un coffre légendaire doit se sentir : une relique, et un objet rare en
+      // prime.
       case "legendary":
-        if (relics.length) return [pick(relics)];
+        if (relics.length) return [pick(relics), ...open("rare", run, random)];
         return open("epic", run, random);
       case "epic": {
         if (!openPowers.length) return [pick(artifacts.length ? artifacts : LOOT.commons), common()];
@@ -63,10 +65,10 @@ const Loot = (() => {
       }
       case "rare": {
         const roll = random();
-        const roomForAlly = (run.allies || []).length < Allies.MAX;
-        if (roll < 0.45 && openPowers.length) return [pick(openPowers)];
-        if (roll < 0.65 && roomForAlly) return [pick(LOOT.allies)];
-        if (roll < 0.87 && artifacts.length) return [pick(artifacts)];
+        const roomForAlly = (run.allies || []).length < Allies.maxFor(run);
+        if (roll < 0.4 && openPowers.length) return [pick(openPowers)];
+        if (roll < 0.7 && roomForAlly) return [pick(LOOT.allies)];
+        if (roll < 0.88 && artifacts.length) return [pick(artifacts)];
         if (weapons.length) return [pick(weapons)];
         return [common()];
       }

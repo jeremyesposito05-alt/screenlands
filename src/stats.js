@@ -14,7 +14,7 @@ const Stats = (() => {
   const MIN_COOLDOWN = 0.4;
 
   function compute(run) {
-    const sum = { speed: 0, damage: 0, haste: 0, area: 0, magnet: 0, luck: 0, maxHp: 0, gemMul: 0 };
+    const sum = { speed: 0, damage: 0, haste: 0, area: 0, magnet: 0, luck: 0, maxHp: 0, gemMul: 0, weaponDamage: 0, allyMax: 0 };
     for (const key of [...run.artifacts, ...run.relics]) {
       const mods = ITEMS[key].mods || {};
       for (const k in mods) sum[k] += mods[k];
@@ -28,6 +28,8 @@ const Stats = (() => {
       luck: sum.luck,
       maxHp: sum.maxHp,
       gemMul: 1 + sum.gemMul,
+      weaponDamage: 1 + sum.weaponDamage,
+      allyMax: sum.allyMax,
     };
   }
 
@@ -36,7 +38,7 @@ const Stats = (() => {
   function weapon(w, s) {
     return {
       ...w,
-      damage: w.damage * s.damage,
+      damage: w.damage * s.damage * s.weaponDamage,
       cooldown: w.cooldown * s.cooldown,
       time: w.time && w.time * Math.min(1, s.cooldown + 0.2),
       reach: w.reach && w.reach * s.area,

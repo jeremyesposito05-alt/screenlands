@@ -91,9 +91,9 @@ graphismes.
   | Coffre | Contenu |
   |---|---|
   | Commun (gris) | un bonus : Plume (vitesse +8 %), Pierre à aiguiser (dégâts +25 %), Gantelet (cadence +12 %), Loupe (portée +15 %), Trèfle (chance +1), Aimant, Fiole (un cœur rendu) |
-  | Rare (bleu) | un pouvoir, ou son niveau suivant ; un artefact : Réceptacle (un cœur de plus), Bottes de vent (vitesse +15 %), Lanterne (révèle la carte et les coffres) ; ou une arme |
+  | Rare (bleu) | un pouvoir, ou son niveau suivant ; un compagnon ; un artefact : Réceptacle (un cœur de plus), Bottes de vent (vitesse +15 %), Lanterne (révèle la carte et les coffres) ; ou une arme |
   | Épique (violet) | un pouvoir monté de deux niveaux, et un bonus en prime |
-  | Légendaire (or) | une relique : Cœur de phénix (on revient une fois de la mort, cœurs pleins, butin gardé), Sablier (menace −2 min, puis figée 1 min), Couronne d'avarice (gemmes +50 %) |
+  | Légendaire (or) | une relique, **et un objet rare en prime** : Cœur de phénix (on revient une fois de la mort, cœurs pleins, butin gardé), Sablier (menace −2 min, puis figée 1 min), Couronne d'avarice (gemmes ×2), Étendard du roi (deux compagnons tout de suite, file de 6), Lame runique (dégâts de l'arme ×2) |
 
   Les bonus se cumulent ; tout passe par les caractéristiques du joueur
   (`src/stats.js`), que l'arme et les pouvoirs suivent.
@@ -105,12 +105,12 @@ graphismes.
   leur niveau.
 - **Des compagnons** (prototype), à la manière des options des jeux d'avion :
   l'**Archer** tire sur l'ennemi le plus proche, le **Guerrier** frappe ce
-  qui approche. Jusqu'à quatre suivent le joueur en file, sur sa trajectoire
-  exacte, comme un serpent. Ils font mal, mais moins que le joueur. On les
-  trouve dans les coffres rares.
+  qui approche. Jusqu'à quatre (six avec l'Étendard du roi) suivent le joueur
+  en file, sur sa trajectoire exacte, comme un serpent. Ils font mal, mais
+  moins que le joueur. On les trouve dans les coffres rares.
 
   Ils servent aussi d'armure : **un coup reçu fait tomber le dernier de la
-  file au lieu de coûter un cœur**. Le compagnon tombé reste sonné trois
+  file au lieu de coûter un cœur**. Le compagnon tombé reste sonné quatre
   secondes ; repasser dessus le relève, sinon il est perdu. Armes, pouvoirs
   et reliques, eux, ne se perdent jamais sur un coup.
 - **Trois cœurs**, qui ne comptent que quand il n'y a plus de compagnon. On
@@ -272,10 +272,13 @@ comporte pareil sur un écran à 60 Hz et sur un iPhone à 120 Hz.
 
 ## Taille d'une zone
 
-Une zone fait 12 x 26 tuiles de 16 px, soit 192 x 416 px : un ratio 9:19.5,
-exactement celui d'un iPhone récent en portrait.
+Une zone fait 26 tuiles de 16 px de haut (416 px). Sa largeur **s'adapte à
+l'écran** au lancement, pour le remplir sans bandes sur les côtés : au moins
+192 px (un ratio 9:19.5), 216 px sur un iPhone récent une fois l'encoche et
+la barre d'accueil retirées, au plus 288 px. Sous l'encoche et la barre
+d'accueil, la couleur des murs prolonge le jeu jusqu'au bord de l'écran.
 
-C'est étroit et haut, et c'est la contrainte du format. Si ça se révèle
-désagréable à jouer, les deux nombres à changer sont `ZONE_W_TILES` et
-`ZONE_H_TILES` dans `src/config.js` ; tout le reste en découle, y compris les
-murs et les portes.
+Les décors sont dessinés pour 192 px et centrés : un écran plus large a
+simplement plus de sol sur les côtés. Toutes leurs coordonnées passent par
+`obstacle()`, `block()` et `p()` dans `src/zones.js`, qui ajoutent ce
+décalage ; murs et portes sont calculés depuis la largeur réelle.

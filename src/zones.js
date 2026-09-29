@@ -24,17 +24,23 @@
 // Chaque élément porte un `kind` : c'est lui que le rendu lira pour choisir
 // un sprite quand les graphismes remplaceront les rectangles.
 
+// Les décors sont dessinés pour une zone de DESIGN_W de large ; sur un écran
+// plus large, ils sont centrés, et le sol s'étend de part et d'autre. Toutes
+// les coordonnées ci-dessous passent par ces trois aides, qui ajoutent le
+// décalage.
+const LAYOUT_OX = (Config.ZONE_W - Config.DESIGN_W) / 2;
+
 // Un bloc plein, posé par son centre ; 2 x 2 tuiles par défaut.
 function obstacle(cx, cy, size = Config.TILE * 2) {
-  return { kind: "rock", x: cx - size / 2, y: cy - size / 2, w: size, h: size };
+  return { kind: "rock", x: cx + LAYOUT_OX - size / 2, y: cy - size / 2, w: size, h: size };
 }
 
 // Un mur intérieur rectangulaire, posé par son coin.
 function block(x, y, w, h) {
-  return { kind: "rock", x, y, w, h };
+  return { kind: "rock", x: x + LAYOUT_OX, y, w, h };
 }
 
-const p = (x, y) => ({ x, y });
+const p = (x, y) => ({ x: x + LAYOUT_OX, y });
 
 // `minDistance` : une zone n'apparaît pas plus près du camp de base, pour
 // réserver les décors les plus piégeux au loin. `fire` : où s'allume le feu
