@@ -22,6 +22,8 @@ const Render = (() => {
     pincer: "#5f9df0",
     shy: "#e89a4c",
     eye: "#f4f6fa",
+    hunter: "#2a1236",
+    hunterEye: "#ff3b5c",
     pupil: "#1a1d26",
     // Un ennemi à plusieurs points de vie porte un liseré plus sombre.
     tough: "#7a2620",
@@ -80,6 +82,8 @@ const Render = (() => {
     for (const d of state.drops) drawItemOnGround(d);
     for (const g of state.gems) drawGem(g.x, g.y, g.size);
     for (const e of state.enemies) drawEnemy(e);
+    if (state.hunterComing) drawHunterWarning(state.hunterComing);
+    if (state.hunter) drawHunter(state.hunter);
     if (state.phase !== "dead") drawPlayer(player);
     if (state.swing) drawSwing(state.swing, player);
     for (const s of state.projectiles) drawProjectile(s);
@@ -89,6 +93,7 @@ const Render = (() => {
     }
 
     drawHud(state);
+    drawThreat(state);
     drawMinimap(state);
     if (state.banner) drawBanner(state.banner, state.phase === "dead");
   }
@@ -151,6 +156,12 @@ const Render = (() => {
       ctx.lineWidth = 1;
       ctx.strokeRect(x + 0.5, y + 0.5, e.size - 1, e.size - 1);
     }
+    // Une élite porte une couronne dorée qui scintille.
+    if (e.elite && !flash) {
+      ctx.strokeStyle = `rgba(242, 196, 77, ${0.6 + 0.4 * Math.sin(clock * 6)})`;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x - 1.5, y - 1.5, e.size + 3, e.size + 3);
+    }
     // Deux yeux qui regardent où il va, comme les fantômes : c'est ce qui
     // trahit son intention.
     if (!flash) {
@@ -163,6 +174,58 @@ const Render = (() => {
       }
     }
     ctx.globalAlpha = 1;
+  }
+
+  // Le Chasseur : plus grand que les autres, sombre, entouré d'un halo qui
+  // palpite, et des yeux rouges qui le suivent.
+  function drawHunter(h) {
+    const s = 14, half = s / 2;
+    const pulse = 0.25 + 0.15 * Math.sin(clock * 5);
+    ctx.fillStyle = `rgba(150, 30, 60, ${pulse})`;
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, 13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = STYLE.hunter;
+    ctx.fillRect(h.x - half, h.y - half, s, s);
+    const lx = h.look.x * 1.5, ly = h.look.y * 1.5;
+    ctx.fillStyle = STYLE.hunterEye;
+    for (const ox of [-3.5, 3.5]) ctx.fillRect(h.x + ox - 1.5 + lx, h.y - 3 + ly, 3, 2);
+  }
+
+  // L'alerte avant l'entrée du Chasseur : un halo rouge qui clignote sur la
+  // porte par laquelle il va passer.
+  function drawHunterWarning(c) {
+    if (Math.floor(clock * 6) % 2) return;
+    ctx.fillStyle = "rgba(220, 40, 70, 0.35)";
+    ctx.beginPath();
+    ctx.arc(c.at.x, c.at.y, 16, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // La jauge de menace, dans l'ouverture du mur du haut : cinq crans qui se
+  // remplissent, du vert au violet du Chasseur.
+  const THREAT_COLORS = ["#6fbf73", "#c9c75a", "#e3a24a", "#e0654a", "#c23a6b", "#8e3ad0"];
+  function drawThreat(state) {
+    const max = Config.THREAT_MAX;
+    const level = World.threatLevel();
+    const progress = level >= max ? 1
+      : (state.run.threat % Config.THREAT_STEP) / Config.THREAT_STEP;
+    const x0 = 66, w = 60, y = 5, h = 5;
+    const seg = w / max;
+    ctx.fillStyle = "rgba(8, 10, 14, 0.6)";
+    ctx.fillRect(x0 - 1, y - 1, w + 2, h + 2);
+    for (let i = 0; i < max; i++) {
+      const fill = i < level ? 1 : i === level ? progress : 0;
+      if (fill <= 0) continue;
+      ctx.fillStyle = THREAT_COLORS[Math.min(i + 1, max)];
+      ctx.fillRect(x0 + i * seg + 0.5, y, (seg - 1) * fill, h);
+    }
+    // Au dernier palier, la jauge palpite.
+    if (level >= max && Math.floor(clock * 3) % 2 === 0) {
+      ctx.strokeStyle = THREAT_COLORS[max];
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x0 - 1.5, y - 1.5, w + 3, h + 3);
+    }
   }
 
   // Un coffre fermé, qui brille un peu pour attirer l'œil.

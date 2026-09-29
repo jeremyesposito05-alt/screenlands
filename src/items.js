@@ -24,12 +24,15 @@ const ITEMS = {
     // largeur en travers, recul infligé.
     time: 0.15, cooldown: 0.28, reach: 14, width: 18, knockback: 20, damage: 1,
   },
+  // Plus lente et plus étroite que l'épée, mais deux fois plus forte, deux
+  // fois plus longue, et elle embroche tout ce qui est aligné : l'arme des
+  // couloirs.
   spear: {
     name: "Lance",
-    hint: "longue portée, coup plus lent",
+    hint: "2 dégâts, transperce en ligne",
     type: "weapon",
     mode: "melee",
-    time: 0.2, cooldown: 0.42, reach: 28, width: 8, knockback: 28, damage: 1,
+    time: 0.18, cooldown: 0.36, reach: 30, width: 8, knockback: 28, damage: 2,
   },
   bow: {
     name: "Arc",

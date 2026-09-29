@@ -72,6 +72,10 @@ const Enemies = (() => {
     ambusher: { name: "Embusqueur", kind: "ambusher", from: 2, size: 10, hp: 1, damage: 1, speed: 6, target: "ahead", lunges: true },
     shy: { name: "Craintif", kind: "shy", from: 3, size: 10, hp: 2, damage: 1, speed: 8, target: "shy" },
     pincer: { name: "Tenailleur", kind: "pincer", from: 4, size: 10, hp: 1, damage: 1, speed: 2, target: "pincer", lunges: true },
+    // Le Chasseur n'est jamais tiré dans une zone (`from` infini) : World le
+    // fait venir au dernier palier de menace. Invincible, il ne se laisse
+    // même pas étourdir.
+    hunter: { name: "Chasseur", kind: "hunter", from: Infinity, size: 10, hp: Infinity, damage: 1, speed: 0, target: "player" },
   };
 
   // Tous les ennemis ont la même taille : une seule grille de navigation par
@@ -89,18 +93,27 @@ const Enemies = (() => {
     return list;
   }
 
-  function spawn(type, at, distance) {
+  // `opts.elite` : une élite a deux fois plus de points de vie, plus un, et
+  // court plus vite. `opts.speed` s'ajoute à la vitesse (la menace).
+  function spawn(type, at, distance, opts = {}) {
     const t = TYPES[type];
+    let hp = t.hp + Math.floor(distance / Config.ENEMY_HP_EVERY);
+    let speed = Config.ENEMY_SPEED + t.speed + Config.ENEMY_SPEED_PER_DISTANCE * distance + (opts.speed || 0);
+    if (opts.elite) {
+      hp = hp * 2 + 1;
+      speed += Config.ELITE_SPEED;
+    }
     return {
       kind: t.kind,
       type,
+      elite: !!opts.elite,
       x: at.x,
       y: at.y,
       home: { x: at.x, y: at.y },
       size: t.size,
-      hp: t.hp + Math.floor(distance / Config.ENEMY_HP_EVERY),
+      hp,
       damage: t.damage,
-      speed: Config.ENEMY_SPEED + t.speed + Config.ENEMY_SPEED_PER_DISTANCE * distance,
+      speed,
       wake: Config.ENEMY_WAKE,
       // Étourdi après un coup : immobile et inoffensif.
       stun: 0,
@@ -130,8 +143,10 @@ const Enemies = (() => {
     return e.hp <= 0;
   }
 
-  // Étourdi sans être blessé : immobile et inoffensif pendant `time`.
+  // Étourdi sans être blessé : immobile et inoffensif pendant `time`. Le
+  // Chasseur, lui, ne s'arrête jamais.
   function stun(e, time) {
+    if (e.type === "hunter") return;
     e.stun = Math.max(e.stun, time);
     e.wake = 0;
     e.lunge = 0;

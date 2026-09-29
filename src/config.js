@@ -85,6 +85,33 @@ const Config = Object.freeze({
   ENEMY_KNOCKBACK: 20,
   ENEMY_STUN: 0.4,
 
+  // --- Menace ---
+  // Plus on reste dans le donjon, plus il devient dangereux. La menace est le
+  // temps passé hors du camp de base, en secondes ; elle monte d'un palier
+  // toutes les THREAT_STEP secondes, jusqu'à THREAT_MAX.
+  THREAT_STEP: 90,
+  THREAT_MAX: 5,
+  // Par palier : ennemis en plus par zone (pour 2 paliers, 1 de plus), et
+  // vitesse ajoutée.
+  THREAT_EXTRA_ENEMY_EVERY: 2,
+  THREAT_SPEED: 4,
+  // Chance qu'un ennemi soit une élite, par palier (plafonnée), et ce que ça
+  // change : points de vie doublés plus un, vitesse, et un objet lâché.
+  ELITE_CHANCE: 0.1,
+  ELITE_CHANCE_MAX: 0.4,
+  ELITE_SPEED: 8,
+  // À partir de ce palier, un ennemi tué se relève au bout de REVIVE_TIME
+  // secondes de menace.
+  REVIVE_LEVEL: 2,
+  REVIVE_TIME: 60,
+  // Au dernier palier, le Chasseur : invincible, il suit le joueur d'écran
+  // en écran et entre HUNTER_DELAY secondes après lui, par la même porte.
+  // Il n'entre ni au camp de base ni autour du feu.
+  HUNTER_SPEED: 66,
+  HUNTER_DELAY: 2.5,
+  // Se reposer au camp fait redescendre la menace d'autant de secondes.
+  CAMP_THREAT_RELIEF: 60,
+
   // --- Messages ---
   BANNER_TIME: 2.2,
   DEATH_PAUSE: 2.5,

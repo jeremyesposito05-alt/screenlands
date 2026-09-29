@@ -23,7 +23,11 @@
 //   décide (carte vidée) : on garde le butin porté, pas l'équipement ;
 // - un ennemi tué lâche une gemme de la valeur de la zone, et reste mort
 //   jusqu'à la fin de l'expédition, pour qu'on ne puisse pas en faire
-//   réapparaître en repassant une porte.
+//   réapparaître en repassant une porte ;
+// - plus on reste hors du camp de base, plus la menace monte : élites, morts
+//   qui se relèvent, ennemis plus nombreux et plus rapides, puis le Chasseur,
+//   invincible, qui suit le joueur partout. Le repos au camp la fait
+//   redescendre un peu.
 
 const World = (() => {
   const state = {
@@ -71,9 +75,12 @@ const World = (() => {
       // Gemmes déjà ramassées, "x,y,index", pour qu'une zone quittée puis
       // retrouvée ne les rende pas deux fois.
       taken: new Set(),
-      // Ennemis tués par zone, "x,y" -> nombre : une zone retrouvée en
-      // aligne d'autant moins.
+      // Ennemis tués par zone, "x,y" -> liste des moments (en secondes de
+      // menace) où ils sont morts : une zone retrouvée en aligne d'autant
+      // moins, jusqu'à ce que la menace les relève.
       killed: new Map(),
+      // La menace : secondes passées hors du camp de base (voir Config).
+      threat: 0,
       // Coffres ouverts, "x,y", et objets posés au sol, "x,y" -> liste.
       opened: new Set(),
       drops: new Map(),
@@ -91,6 +98,12 @@ const World = (() => {
     // déclenchent qu'en arrivant, pas à chaque image passée à côté.
     atFire: false,
     atPortal: false,
+    // Le palier de menace atteint, pour n'annoncer chaque palier qu'une fois.
+    threatLevel: 0,
+    // Le Chasseur, quand il est dans la zone, et le compte à rebours de son
+    // entrée : {at: {x, y}, time} ou null.
+    hunter: null,
+    hunterComing: null,
   };
 
   const zoneKey = () => `${state.coords.x},${state.coords.y}`;
@@ -108,6 +121,10 @@ const World = (() => {
     r.drops.clear();
     r.weapon = null;
     r.artifacts = [];
+    r.threat = 0;
+    state.threatLevel = 0;
+    state.hunter = null;
+    state.hunterComing = null;
     state.visited.clear();
     const p = state.player;
     p.maxHp = Config.PLAYER_HP;
@@ -167,22 +184,105 @@ const World = (() => {
     if (!state.run.drops.has(key)) state.run.drops.set(key, []);
     state.drops = state.run.drops.get(key);
 
+    spawnEnemies(cx, cy, zone, distance, campHere);
+
+    // Le Chasseur suit le joueur : il entre par la même porte, un peu après
+    // lui. Il ne passe ni au camp de base ni autour du feu.
+    state.hunter = null;
+    state.hunterComing = hunterActive() && !zone.safe && !campHere
+      ? { at: { x: p.x, y: p.y }, time: Config.HUNTER_DELAY }
+      : null;
+  }
+
+  // Les ennemis de la zone. Leur composition est tirée avec la graine de la
+  // zone : la même à chaque retour. La menace en ajoute, les accélère et
+  // fait apparaître des élites ; les ennemis tués sont retirés du début de la
+  // liste tant qu'ils ne se sont pas relevés. Aucun ennemi au camp de base ni
+  // autour du feu ; le camp éteint, la zone retrouve les siens.
+  function spawnEnemies(cx, cy, zone, distance, campHere) {
+    const level = threatLevel();
     const table = Config.ENEMIES_BY_DISTANCE;
-    // La composition de la zone est tirée avec sa propre graine : la même à
-    // chaque retour. Les ennemis déjà tués sont retirés du début de la liste,
-    // Traqueur compris.
-    // Aucun ennemi au camp de base ni autour du feu. Le camp éteint, la zone
-    // retrouve les siens à la visite suivante.
-    const planned = zone.safe || campHere ? 0 : table[Math.min(distance, table.length - 1)];
-    const rng = makeRandom(deriveSeed(ZoneRegistry.seed, cx, cy));
-    const roster = Enemies.roster(planned, distance, rng)
-      .slice(state.run.killed.get(key) || 0);
+    const planned = zone.safe || campHere ? 0
+      : table[Math.min(distance, table.length - 1)] + Math.floor(level / Config.THREAT_EXTRA_ENEMY_EVERY);
+    const seed = ZoneRegistry.seed;
+    const roster = Enemies.roster(planned, distance, makeRandom(deriveSeed(seed, cx, cy)))
+      .map((type, i) => ({ type, i }))
+      .slice(deadCount(`${cx},${cy}`));
+
+    const p = state.player;
     const spots = zone.spawns
       .filter((at) => Math.hypot(at.x - p.x, at.y - p.y) >= Config.SPAWN_SAFE_DISTANCE)
       .sort((a, b) => Math.hypot(b.x - p.x, b.y - p.y) - Math.hypot(a.x - p.x, a.y - p.y));
-    state.enemies = roster
-      .slice(0, spots.length)
-      .map((type, i) => Enemies.spawn(type, spots[i], distance));
+    // Être une élite est tiré par ennemi, avec une graine fixe : repasser la
+    // porte ne relance pas le dé.
+    const eliteChance = Math.min(Config.ELITE_CHANCE_MAX, Config.ELITE_CHANCE * level);
+    state.enemies = roster.slice(0, spots.length).map(({ type, i }, n) => {
+      const roll = deriveSeed(seed, cx, cy, 100 + i) / 4294967296;
+      return Enemies.spawn(type, spots[n], distance, {
+        elite: roll < eliteChance,
+        speed: Config.THREAT_SPEED * level,
+      });
+    });
+  }
+
+  // Combien d'ennemis de cette zone sont encore morts : à partir du palier
+  // REVIVE_LEVEL, ceux tués depuis plus de REVIVE_TIME se relèvent.
+  function deadCount(key) {
+    const kills = state.run.killed.get(key) || [];
+    if (threatLevel() < Config.REVIVE_LEVEL) return kills.length;
+    const t = state.run.threat;
+    return kills.filter((at) => t - at < Config.REVIVE_TIME).length;
+  }
+
+  function threatLevel() {
+    return Math.min(Config.THREAT_MAX, Math.floor(state.run.threat / Config.THREAT_STEP));
+  }
+
+  const hunterActive = () => threatLevel() >= Config.THREAT_MAX;
+
+  // Ce qu'annonce chaque palier de menace.
+  const THREAT_NEWS = [
+    null,
+    ["Le donjon s'agite", "des élites apparaissent"],
+    ["Menace 2", "les morts se relèvent"],
+    ["Menace 3", "plus nombreux, plus rapides"],
+    ["Quelque chose approche…", "trouve un camp"],
+    ["Le Chasseur est là", "il te suivra partout"],
+  ];
+
+  // Fait monter la menace, annonce les paliers, et fait entrer le Chasseur.
+  function updateThreat(dt) {
+    if (!state.zone.safe) state.run.threat += dt;
+    const level = threatLevel();
+    if (level > state.threatLevel && THREAT_NEWS[level]) {
+      showBanner(...THREAT_NEWS[level], 3);
+    }
+    // Le Chasseur surgit dès le dernier palier, sans attendre qu'on change de
+    // zone : il arrive par la porte la plus proche.
+    if (level >= Config.THREAT_MAX && state.threatLevel < Config.THREAT_MAX &&
+        !state.zone.safe && !state.fire) {
+      state.hunterComing = { at: nearestDoor(), time: Config.HUNTER_DELAY };
+    }
+    state.threatLevel = level;
+
+    const c = state.hunterComing;
+    if (c && (c.time -= dt) <= 0) {
+      const h = Enemies.spawn("hunter", c.at, 0);
+      h.speed = Config.HUNTER_SPEED;
+      h.wake = 0;
+      state.hunter = h;
+      state.hunterComing = null;
+    }
+  }
+
+  function nearestDoor() {
+    const p = state.player, W = Config.ZONE_W, H = Config.ZONE_H, m = Config.ENTRY_MARGIN;
+    const exits = ZoneRegistry.exits(state.coords.x, state.coords.y);
+    const doors = [
+      exits.left && { x: m, y: H / 2 }, exits.right && { x: W - m, y: H / 2 },
+      exits.up && { x: W / 2, y: m }, exits.down && { x: W / 2, y: H - m },
+    ].filter(Boolean);
+    return doors.sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
   }
 
   function gemValue(distance) {
@@ -259,6 +359,7 @@ const World = (() => {
     const p = state.player;
     p.invuln = Math.max(0, p.invuln - dt);
     p.attackCooldown = Math.max(0, p.attackCooldown - dt);
+    updateThreat(dt);
 
     // Un virage demandé est pris tout de suite si le joueur est à l'arrêt ou
     // bloqué ; en pleine course, seulement quand la voie s'ouvre vraiment.
@@ -292,7 +393,10 @@ const World = (() => {
     restAtFire();
     enterPortal();
 
-    for (const e of state.enemies) {
+    // Le Chasseur n'est pas dans la liste des ennemis : les armes ne le
+    // touchent pas, et il ne compte pas parmi les morts de la zone.
+    const hunters = state.hunter ? [state.hunter] : [];
+    for (const e of [...state.enemies, ...hunters]) {
       Enemies.step(e, p, state.enemies, dt, state.nav, state.solids);
       if (p.invuln <= 0 && Enemies.harmful(e) && Physics.overlapsBody(p, e)) hurt(e);
       if (state.phase === "dead") return;
@@ -303,9 +407,26 @@ const World = (() => {
 
   function kill(e) {
     const key = zoneKey();
-    state.run.killed.set(key, (state.run.killed.get(key) || 0) + 1);
+    if (!state.run.killed.has(key)) state.run.killed.set(key, []);
+    state.run.killed.get(key).push(state.run.threat);
     state.gems.push({ kind: "gem", id: null, x: e.x, y: e.y,
                       size: Config.GEM_SIZE, value: gemValue(state.distance) });
+    // Une élite lâche en plus un objet.
+    if (e.elite) {
+      state.drops.push({ kind: "item", item: eliteLoot(), x: e.x, y: e.y + 10, size: 10, ready: true });
+    }
+  }
+
+  // L'objet d'une élite : une autre arme que celle en main, ou un artefact
+  // qui sert encore (un deuxième aimant ou une deuxième lanterne ne
+  // changeraient rien ; cœurs et bottes, si).
+  function eliteLoot() {
+    const pool = Object.keys(ITEMS).filter((k) => {
+      const it = ITEMS[k];
+      if (it.type === "weapon") return k !== state.run.weapon;
+      return (k !== "magnet" && k !== "lantern") || !has(k);
+    });
+    return pool[Math.floor(Math.random() * pool.length)];
   }
 
   // Une gemme ramassée, par le joueur ou par le boomerang.
@@ -402,6 +523,16 @@ const World = (() => {
     }
     Generator.moveCamp(ZoneRegistry.map);
     state.fire = null;
+
+    // Le repos calme aussi le donjon ; sous le dernier palier, le Chasseur
+    // perd la trace.
+    const r = state.run;
+    r.threat = Math.max(0, r.threat - Config.CAMP_THREAT_RELIEF);
+    state.threatLevel = threatLevel();
+    if (!hunterActive()) {
+      state.hunter = null;
+      state.hunterComing = null;
+    }
     showBanner(carried > 0 ? `+${carried} à l'abri` : "Cœurs rendus",
                "le feu s'éteint, un autre s'allume ailleurs");
   }
@@ -515,5 +646,5 @@ const World = (() => {
     state.popups = state.popups.filter((pop) => pop.time > 0);
   }
 
-  return { state, newExpedition, gemValue, step, has, say: showBanner };
+  return { state, newExpedition, gemValue, step, has, threatLevel, say: showBanner };
 })();

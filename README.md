@@ -55,7 +55,8 @@ graphismes.
 - **On part les mains vides**, et on fouille la carte. Six coffres y sont
   cachés, un par écran au plus, dans un recoin du décor :
   - une arme de mêlée, toujours à un ou deux écrans du camp de base :
-    **Épée** (coup rapide) ou **Lance** (longue, plus lente) ;
+    **Épée** (coup rapide et large) ou **Lance** (deux fois plus longue et
+    plus forte, transperce tout ce qui est aligné, mais plus lente) ;
   - une arme à distance, à trois écrans ou plus : **Arc** (une flèche
     jusqu'au premier obstacle) ou **Boomerang** (étourdit sans blesser,
     rapporte les gemmes qu'il touche, revient dans la main) ;
@@ -75,6 +76,19 @@ graphismes.
   lance une nouvelle expédition quand on a vidé la carte : on y garde le
   butin porté, pas l'équipement, sinon on accumulerait les artefacts de
   carte en carte.
+- **Une menace qui monte.** Plus on reste hors du camp de base, plus le
+  donjon devient dangereux. La jauge du haut monte d'un cran toutes les
+  90 secondes :
+  1. des **élites** apparaissent (couronne dorée, deux fois plus solides,
+     elles lâchent un objet en plus de leur gemme) ;
+  2. les ennemis tués **se relèvent** au bout d'une minute ;
+  3. et 4. ils sont plus nombreux et plus rapides à chaque cran ;
+  5. le **Chasseur** arrive : invincible, insensible au boomerang, il suit
+     le joueur d'écran en écran et entre par la même porte que lui. Il ne
+     passe ni au camp de base ni autour du feu.
+
+  Se reposer au camp fait redescendre la menace d'une minute ; sous le
+  dernier cran, le Chasseur perd la trace.
 - **La banque** est conservée d'une partie à l'autre, dans le navigateur.
 - **Une mini-carte** en haut à droite : camp de base, écrans visités et leurs
   portes, écrans entrevus derrière, camp s'il a été vu, coffres non ouverts,
