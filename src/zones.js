@@ -177,7 +177,7 @@ const ZoneRegistry = (() => {
     distance(cx, cy) { return cell(cx, cy).distance; },
     // Les côtés de la zone qui ont une porte vers une voisine.
     exits(cx, cy) { return cell(cx, cy).links; },
-    // L'objet caché dans le coffre de cet écran, ou null.
+    // Le coffre de cet écran, {tier, item}, ou null.
     chest(cx, cy) { return cell(cx, cy).chest; },
     // Le camp brûle-t-il dans cet écran ? Il n'y en a qu'un à la fois.
     isCamp(cx, cy) { return !!map.camp && map.camp.x === cx && map.camp.y === cy; },

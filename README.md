@@ -52,23 +52,40 @@ graphismes.
   Ils trouvent leur chemin autour des obstacles, sont plus lents que le
   joueur, et plus nombreux et plus rapides à mesure qu'on s'éloigne. Aucun
   près des camps.
-- **On part les mains vides**, et on fouille la carte. Six coffres y sont
-  cachés, un par écran au plus, dans un recoin du décor :
-  - une arme de mêlée, toujours à un ou deux écrans du camp de base :
-    **Épée** (coup rapide et large) ou **Lance** (deux fois plus longue et
-    plus forte, transperce tout ce qui est aligné, mais plus lente) ;
+- **On part les mains vides**, et on fouille la carte. Dix coffres y sont
+  cachés, un par écran au plus, dans un recoin du décor. Deux contiennent
+  toujours une arme :
+  - une arme de mêlée, à un ou deux écrans du camp de base : **Épée** (coup
+    rapide et large) ou **Lance** (deux fois plus longue et plus forte,
+    transperce tout ce qui est aligné, mais plus lente) ;
   - une arme à distance, à trois écrans ou plus : **Arc** (une flèche
     jusqu'au premier obstacle) ou **Boomerang** (étourdit sans blesser,
-    rapporte les gemmes qu'il touche, revient dans la main) ;
-  - trois artefacts sur quatre : **Réceptacle** (un cœur de plus),
-    **Bottes de vent** (vitesse +15 %), **Aimant** (attire les gemmes),
-    **Lanterne** (révèle la carte et ses coffres).
+    rapporte les gemmes qu'il touche, revient dans la main).
 
   On tient une seule arme : en ramasser une autre fait tomber l'ancienne,
   qu'on peut revenir chercher. On frappe sans s'arrêter ; le coup suit le
   joueur. Un ennemi touché est repoussé et étourdi ; tué, il lâche une gemme
   de la valeur de la zone, et reste mort jusqu'à la fin de l'expédition.
   Au-delà de trois écrans, les ennemis encaissent deux coups.
+- **Quatre raretés de coffres**, visibles de loin à leur couleur, et plus
+  belles avec la distance. À l'ouverture, la chance et la menace peuvent
+  faire monter un coffre d'un cran. Les élites lâchent un coffre épique.
+
+  | Coffre | Contenu |
+  |---|---|
+  | Commun (gris) | un bonus : Plume (vitesse +8 %), Pierre à aiguiser (dégâts +25 %), Gantelet (cadence +12 %), Loupe (portée +15 %), Trèfle (chance +1), Aimant, Fiole (un cœur rendu) |
+  | Rare (bleu) | un pouvoir, ou son niveau suivant ; un artefact : Réceptacle (un cœur de plus), Bottes de vent (vitesse +15 %), Lanterne (révèle la carte et les coffres) ; ou une arme |
+  | Épique (violet) | un pouvoir monté de deux niveaux, et un bonus en prime |
+  | Légendaire (or) | une relique : Cœur de phénix (on revient une fois de la mort, cœurs pleins, butin gardé), Sablier (menace −2 min, puis figée 1 min), Couronne d'avarice (gemmes +50 %) |
+
+  Les bonus se cumulent ; tout passe par les caractéristiques du joueur
+  (`src/stats.js`), que l'arme et les pouvoirs suivent.
+- **Cinq pouvoirs automatiques**, à la Vampire Survivors, de trois niveaux
+  chacun : **Traînée de feu** (le sol brûle derrière soi), **Orbe** (des
+  orbes tournent autour de soi), **Éclair** (frappe l'ennemi le plus proche,
+  rebondit au niveau 3), **Onde de givre** (ralentit, puis blesse),
+  **Égide** (absorbe un coup, puis se recharge). Ils s'affichent en bas avec
+  leur niveau.
 - **Trois cœurs.** On garde son équipement tant qu'on est en vie. Mourir fait
   perdre le butin porté et tout l'équipement, et ramène au camp de base sur
   une nouvelle carte.
@@ -152,7 +169,10 @@ src/physics.js       collisions entre corps et murs
 src/random.js        hasard à graine : une même graine redonne la même carte
 src/zones.js         les décors, la carte chargée et la ceinture de murs
 src/generator.js     tire une carte neuve à chaque expédition, et y cache les coffres
-src/items.js         les armes et les artefacts, décrits par des données
+src/items.js         tous les objets, décrits par des données, et les tables de butin
+src/stats.js         les caractéristiques du joueur, calculées à un seul endroit
+src/powers.js        les pouvoirs automatiques
+src/loot.js          la rareté des coffres et le tirage de leur contenu
 src/nav.js           plus court chemin des ennemis autour des obstacles
 src/enemies.js       les ennemis : des fiches qui choisissent une règle de visée
 src/save.js          la progression permanente (la banque)

@@ -135,11 +135,17 @@ const Enemies = (() => {
     return e.wake <= 0 && e.stun <= 0;
   }
 
-  // Encaisse un coup venu de `dir` et renvoie true s'il en meurt.
+  // Encaisse un coup venu de `dir` et renvoie true s'il en meurt. Sans
+  // direction (flammes, éclair), pas de recul, et un étourdissement bref :
+  // juste le temps de clignoter.
   function hit(e, dir, solids, damage = 1, knockback = Config.ENEMY_KNOCKBACK) {
     e.hp -= damage;
-    stun(e, Config.ENEMY_STUN);
-    Physics.moveAxis(e, dir.x ? "x" : "y", (dir.x || dir.y) * knockback, solids);
+    if (dir && knockback) {
+      stun(e, Config.ENEMY_STUN);
+      Physics.moveAxis(e, dir.x ? "x" : "y", (dir.x || dir.y) * knockback, solids);
+    } else {
+      stun(e, 0.08);
+    }
     return e.hp <= 0;
   }
 
@@ -195,8 +201,10 @@ const Enemies = (() => {
     }
 
     // Vers le point de passage, un seul axe à la fois : l'axe le plus écarté
-    // d'abord, l'autre s'il est bloqué. Sans jamais dépasser le point.
-    const budget = e.speed * dt;
+    // d'abord, l'autre s'il est bloqué. Sans jamais dépasser le point. Pris
+    // dans le givre, il va deux fois moins vite.
+    e.slow = Math.max(0, (e.slow || 0) - dt);
+    const budget = e.speed * dt * (e.slow > 0 ? 0.5 : 1);
     const dx = e.waypoint.x - e.x;
     const dy = e.waypoint.y - e.y;
     const axes = Math.abs(dx) >= Math.abs(dy) ? [["x", dx], ["y", dy]] : [["y", dy], ["x", dx]];

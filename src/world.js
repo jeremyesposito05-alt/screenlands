@@ -39,14 +39,20 @@ const World = (() => {
     nav: null,
     gems: [],
     enemies: [],
-    // Le coffre de la zone s'il n'a pas été ouvert : {x, y, size, item}.
+    // Le coffre de la zone s'il n'a pas été ouvert : {x, y, size, tier,
+    // item}, `item` étant null quand le contenu est tiré à l'ouverture.
     chest: null,
+    // Les caractéristiques du joueur (voir Stats), recalculées à chaque objet
+    // pris, et l'état des pouvoirs à l'écran (voir Powers).
+    stats: null,
+    fx: null,
     // Le feu, si le camp brûle dans cette zone, et le portail du camp de
     // base : {x, y} ou null.
     fire: null,
     portal: null,
-    // Les objets posés au sol dans cette zone (armes lâchées) : la liste est
-    // celle de run.drops, donc ils y restent quand on revient.
+    // Ce qui est posé au sol dans cette zone : armes lâchées ({kind: "item"})
+    // et coffres lâchés par les élites ({kind: "chest"}). La liste est celle
+    // de run.drops, donc ils y restent quand on revient.
     drops: [],
     // Le coup de mêlée en cours, et les projectiles en vol (voir Weapons).
     swing: null,
@@ -69,9 +75,15 @@ const World = (() => {
     // L'expédition en cours : tout ce qui meurt avec elle.
     run: {
       carried: 0,
-      // L'arme en main (clé de ITEMS) ou null, et les artefacts trouvés.
+      // L'arme en main (clé de ITEMS) ou null ; les bonus et artefacts
+      // trouvés, qui se cumulent (une clé par exemplaire) ; les pouvoirs,
+      // clé -> niveau ; les reliques.
       weapon: null,
       artifacts: [],
+      powers: {},
+      relics: [],
+      // Secondes pendant lesquelles le Sablier fige la menace.
+      threatFrozen: 0,
       // Gemmes déjà ramassées, "x,y,index", pour qu'une zone quittée puis
       // retrouvée ne les rende pas deux fois.
       taken: new Set(),
@@ -121,13 +133,26 @@ const World = (() => {
     r.drops.clear();
     r.weapon = null;
     r.artifacts = [];
+    r.powers = {};
+    r.relics = [];
     r.threat = 0;
+    r.threatFrozen = 0;
+    state.fx = Powers.fresh();
     state.threatLevel = 0;
     state.hunter = null;
     state.hunterComing = null;
     state.visited.clear();
+    recomputeStats();
+  }
+
+  // Les caractéristiques changent à chaque objet pris ou perdu. Un cœur de
+  // plus arrive plein.
+  function recomputeStats() {
     const p = state.player;
-    p.maxHp = Config.PLAYER_HP;
+    const before = p.maxHp;
+    state.stats = Stats.compute(state.run);
+    p.maxHp = Config.PLAYER_HP + state.stats.maxHp;
+    if (p.maxHp > before) p.hp += p.maxHp - before;
     p.hp = Math.min(p.hp, p.maxHp);
   }
 
@@ -169,6 +194,7 @@ const World = (() => {
     state.swing = null;
     state.projectiles = [];
     p.attack = 0;
+    Powers.clearZone(state.fx);
 
     const value = gemValue(distance);
     state.gems = zone.gems
@@ -177,9 +203,9 @@ const World = (() => {
       .filter((g) => !state.run.taken.has(g.id));
 
     const key = `${cx},${cy}`;
-    const item = ZoneRegistry.chest(cx, cy);
-    state.chest = item && !state.run.opened.has(key)
-      ? { kind: "chest", x: zone.chest.x, y: zone.chest.y, size: 12, item }
+    const chest = ZoneRegistry.chest(cx, cy);
+    state.chest = chest && !state.run.opened.has(key)
+      ? { kind: "chest", x: zone.chest.x, y: zone.chest.y, size: 12, tier: chest.tier, item: chest.item }
       : null;
     if (!state.run.drops.has(key)) state.run.drops.set(key, []);
     state.drops = state.run.drops.get(key);
@@ -252,7 +278,9 @@ const World = (() => {
 
   // Fait monter la menace, annonce les paliers, et fait entrer le Chasseur.
   function updateThreat(dt) {
-    if (!state.zone.safe) state.run.threat += dt;
+    const r = state.run;
+    if (r.threatFrozen > 0) r.threatFrozen = Math.max(0, r.threatFrozen - dt);
+    else if (!state.zone.safe) r.threat += dt;
     const level = threatLevel();
     if (level > state.threatLevel && THREAT_NEWS[level]) {
       showBanner(...THREAT_NEWS[level], 3);
@@ -285,14 +313,14 @@ const World = (() => {
     return doors.sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
   }
 
+  // Ce que vaut une gemme à cette distance, Couronne d'avarice comprise.
   function gemValue(distance) {
-    return Config.GEM_BASE * 2 ** Math.max(0, distance - 1);
+    const mul = state.stats ? state.stats.gemMul : 1;
+    return Math.round(Config.GEM_BASE * 2 ** Math.max(0, distance - 1) * mul);
   }
 
   function speed() {
-    let bonus = 0;
-    for (const a of state.run.artifacts) bonus += ITEMS[a].speedBonus || 0;
-    return Config.PLAYER_SPEED * (1 + bonus);
+    return Config.PLAYER_SPEED * state.stats.speed;
   }
 
   // Un corps pourrait-il avancer d'un pixel dans cette direction ?
@@ -379,8 +407,9 @@ const World = (() => {
       if (!state.swing) p.facing = dir;
       movePlayer(dir, speed() * dt);
     }
-    if (attack && state.run.weapon) Weapons.use(state, ITEMS[state.run.weapon]);
+    if (attack && state.run.weapon) Weapons.use(state, Stats.weapon(ITEMS[state.run.weapon], state.stats));
     Weapons.update(state, dt, { kill, collect: pickUp });
+    Powers.update(state, dt, state.run.powers, state.stats, { damage: damageEnemy });
 
     attractGems(dt);
     state.gems = state.gems.filter((g) => {
@@ -411,22 +440,20 @@ const World = (() => {
     state.run.killed.get(key).push(state.run.threat);
     state.gems.push({ kind: "gem", id: null, x: e.x, y: e.y,
                       size: Config.GEM_SIZE, value: gemValue(state.distance) });
-    // Une élite lâche en plus un objet.
+    // Une élite lâche en plus un coffre épique.
     if (e.elite) {
-      state.drops.push({ kind: "item", item: eliteLoot(), x: e.x, y: e.y + 10, size: 10, ready: true });
+      state.drops.push({ kind: "chest", tier: "epic", item: null, x: e.x, y: e.y, size: 12 });
     }
   }
 
-  // L'objet d'une élite : une autre arme que celle en main, ou un artefact
-  // qui sert encore (un deuxième aimant ou une deuxième lanterne ne
-  // changeraient rien ; cœurs et bottes, si).
-  function eliteLoot() {
-    const pool = Object.keys(ITEMS).filter((k) => {
-      const it = ITEMS[k];
-      if (it.type === "weapon") return k !== state.run.weapon;
-      return (k !== "magnet" && k !== "lantern") || !has(k);
-    });
-    return pool[Math.floor(Math.random() * pool.length)];
+  // Les pouvoirs blessent par ici : même règle de mort et de butin que pour
+  // les armes. Renvoie true si l'ennemi en meurt.
+  function damageEnemy(e, amount, dir, knockback) {
+    if (!Enemies.hit(e, dir, state.solids, amount, knockback)) return false;
+    const i = state.enemies.indexOf(e);
+    if (i >= 0) state.enemies.splice(i, 1);
+    kill(e);
+    return true;
   }
 
   // Une gemme ramassée, par le joueur ou par le boomerang.
@@ -438,10 +465,13 @@ const World = (() => {
     state.popups.push({ x: g.x, y: g.y, text: `+${g.value}`, time: 0.8 });
   }
 
-  // L'aimant tire vers le joueur les gemmes assez proches.
+  // L'aimant tire vers le joueur les gemmes assez proches ; chaque aimant de
+  // plus agrandit sa portée.
+  const MAGNET_PULL = 110;
   function attractGems(dt) {
-    if (!has("magnet")) return;
-    const { radius, pull } = ITEMS.magnet;
+    const radius = state.stats.magnet;
+    if (!radius) return;
+    const pull = MAGNET_PULL;
     const p = state.player;
     for (const g of state.gems) {
       const dx = p.x - g.x, dy = p.y - g.y;
@@ -458,17 +488,47 @@ const World = (() => {
     if (!c || !Physics.overlapsBody(state.player, c)) return;
     state.run.opened.add(zoneKey());
     state.chest = null;
-    take(c.item);
+    openLoot(c);
   }
 
-  // Une arme lâchée n'est reprenable qu'après s'en être éloigné : sinon, en
-  // l'échangeant, on la reprendrait aussitôt.
+  // Ouvre un coffre : son contenu est fixé (les armes garanties) ou tiré
+  // maintenant, et la chance et la menace peuvent le faire monter d'une
+  // rareté.
+  const TIER_NAMES = { common: "commun", rare: "rare", epic: "épique", legendary: "légendaire" };
+  function openLoot(c) {
+    if (c.item) {
+      take(c.item);
+      return;
+    }
+    const tier = Loot.upgrade(c.tier, state.stats.luck, threatLevel());
+    const keys = Loot.open(tier, state.run);
+    const upgraded = tier !== c.tier;
+    for (const k of keys) take(k, true);
+    // L'annonce porte sur le premier objet, à son niveau final : un pouvoir
+    // monté de deux crans s'annonce au niveau atteint.
+    const main = ITEMS[keys[0]];
+    const title = main.type === "power" ? `${main.name} niv. ${state.run.powers[keys[0]]}` : main.name;
+    const hint = main.hint;
+    // Un coffre épique donne plusieurs choses : on annonce la principale,
+    // et la rareté quand elle a monté.
+    const extra = keys.length > 1 ? `  · +${ITEMS[keys[keys.length - 1]].name}` : "";
+    showBanner(title, upgraded ? `coffre devenu ${TIER_NAMES[tier]} !` : hint + extra, 2.8);
+    state.popups.push({ x: c.x, y: c.y, text: TIER_NAMES[tier], time: 1, tier });
+  }
+
+  // Ce qui est au sol : une arme lâchée n'est reprenable qu'après s'en être
+  // éloigné (sinon, en l'échangeant, on la reprendrait aussitôt) ; un coffre
+  // s'ouvre au contact.
   function pickUpDrops() {
     const p = state.player;
     for (let i = state.drops.length - 1; i >= 0; i--) {
       const d = state.drops[i];
       const touching = Physics.overlapsBody(p, d);
-      if (!touching) {
+      if (d.kind === "chest") {
+        if (!touching) continue;
+        state.drops.splice(i, 1);
+        openLoot(d);
+      } else if (!touching) {
         d.ready = true;
       } else if (d.ready) {
         state.drops.splice(i, 1);
@@ -477,25 +537,47 @@ const World = (() => {
     }
   }
 
-  // Le joueur prend un objet : une arme remplace celle qu'il tenait, qui tombe
-  // à ses pieds ; un artefact s'ajoute.
-  function take(key) {
+  // Le joueur prend un objet. Renvoie [titre, détail] pour l'annonce, et
+  // l'annonce elle-même sauf si `quiet`.
+  function take(key, quiet = false) {
     const item = ITEMS[key];
     const p = state.player;
-    if (item.type === "weapon") {
-      if (state.run.weapon) {
-        state.drops.push({ kind: "item", item: state.run.weapon, x: p.x, y: p.y, size: 10, ready: false });
-      }
-      state.run.weapon = key;
-      p.attackCooldown = 0;
-    } else {
-      state.run.artifacts.push(key);
-      if (key === "heart") {
-        p.maxHp += 1;
-        p.hp += 1;
-      }
+    const r = state.run;
+    let title = item.name;
+    switch (item.type) {
+      case "weapon":
+        // Une arme remplace celle qu'on tenait, qui tombe à nos pieds.
+        if (r.weapon) {
+          state.drops.push({ kind: "item", item: r.weapon, x: p.x, y: p.y, size: 10, ready: false });
+        }
+        r.weapon = key;
+        p.attackCooldown = 0;
+        break;
+      case "power":
+        r.powers[key] = Math.min(Powers.MAX_LEVEL, (r.powers[key] || 0) + 1);
+        title = `${item.name} niv. ${r.powers[key]}`;
+        break;
+      case "relic":
+        r.relics.push(key);
+        if (key === "hourglass") {
+          r.threat = Math.max(0, r.threat - 2 * 60);
+          r.threatFrozen = 60;
+          state.threatLevel = threatLevel();
+          if (!hunterActive()) {
+            state.hunter = null;
+            state.hunterComing = null;
+          }
+        }
+        break;
+      case "consumable":
+        if (key === "flask") p.hp = Math.min(p.maxHp, p.hp + 1);
+        break;
+      default:
+        r.artifacts.push(key);
     }
-    showBanner(item.name, item.hint);
+    recomputeStats();
+    if (!quiet) showBanner(title, item.hint);
+    return [title, item.hint];
   }
 
   function restAtFire() {
@@ -557,6 +639,12 @@ const World = (() => {
 
   function hurt(enemy) {
     const p = state.player;
+    // L'Égide prend le coup à la place du joueur.
+    if (Powers.absorb(state, state.run.powers)) {
+      p.invuln = 0.6;
+      state.popups.push({ x: p.x, y: p.y - 6, text: "bloqué", time: 0.7 });
+      return;
+    }
     p.hp -= enemy.damage;
     p.invuln = Config.HURT_INVULN;
 
@@ -577,6 +665,17 @@ const World = (() => {
   }
 
   function die() {
+    // Le Cœur de phénix brûle à la place du joueur, une fois.
+    const phoenix = state.run.relics.indexOf("phoenix");
+    if (phoenix >= 0) {
+      const p = state.player;
+      state.run.relics.splice(phoenix, 1);
+      recomputeStats();
+      p.hp = p.maxHp;
+      p.invuln = 2.5;
+      showBanner("Le phénix renaît", "tu reviens, cœurs pleins", 2.5);
+      return;
+    }
     const lost = state.run.carried;
     state.run.carried = 0;
     state.phase = "dead";

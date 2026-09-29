@@ -74,22 +74,29 @@ const Render = (() => {
 
     if (state.fire) drawFire(state.fire);
     if (state.portal) drawPortal(state.portal);
+    drawGroundFx(state.fx);
     for (const s of solids) {
       ctx.fillStyle = STYLE[s.kind];
       ctx.fillRect(s.x, s.y, s.w, s.h);
     }
     if (state.chest) drawChest(state.chest);
-    for (const d of state.drops) drawItemOnGround(d);
+    for (const d of state.drops) {
+      if (d.kind === "chest") drawChest(d);
+      else drawItemOnGround(d);
+    }
     for (const g of state.gems) drawGem(g.x, g.y, g.size);
     for (const e of state.enemies) drawEnemy(e);
     if (state.hunterComing) drawHunterWarning(state.hunterComing);
     if (state.hunter) drawHunter(state.hunter);
-    if (state.phase !== "dead") drawPlayer(player);
+    if (state.phase !== "dead") {
+      drawPlayer(player);
+      drawPlayerFx(state);
+    }
     if (state.swing) drawSwing(state.swing, player);
     for (const s of state.projectiles) drawProjectile(s);
 
     for (const pop of state.popups) {
-      text(pop.text, pop.x, pop.y - 8, STYLE.gem, "center");
+      text(pop.text, pop.x, pop.y - 8, pop.tier ? TIERS[pop.tier] : STYLE.gem, "center");
     }
 
     drawHud(state);
@@ -228,19 +235,107 @@ const Render = (() => {
     }
   }
 
-  // Un coffre fermé, qui brille un peu pour attirer l'œil.
+  // Les couleurs des raretés : sur les coffres, la mini-carte et les annonces.
+  const TIERS = { common: "#b8b2a6", rare: "#4fa3ff", epic: "#b36bff", legendary: "#ffc93d" };
+
+  // Un coffre fermé, cerclé et nimbé de la couleur de sa rareté, pour qu'on
+  // juge de loin si le détour en vaut la peine. Le légendaire scintille.
   function drawChest(c) {
     const w = 12, h = 9;
     const x = c.x - w / 2, y = c.y - h / 2;
-    const glow = 0.25 + 0.2 * Math.sin(clock * 4);
-    ctx.fillStyle = `rgba(242, 196, 77, ${glow})`;
-    ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+    const color = TIERS[c.tier] || TIERS.common;
+    const strong = c.tier === "epic" || c.tier === "legendary";
+    const glow = (strong ? 0.35 : 0.2) + 0.18 * Math.sin(clock * (strong ? 6 : 4));
+    ctx.globalAlpha = glow;
+    ctx.fillStyle = color;
+    ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
+    ctx.globalAlpha = 1;
     ctx.fillStyle = STYLE.chest;
     ctx.fillRect(x, y, w, h);
     ctx.fillStyle = STYLE.chestLid;
     ctx.fillRect(x, y, w, 3);
-    ctx.fillStyle = STYLE.chestLock;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.fillStyle = color;
     ctx.fillRect(c.x - 1, y + 2, 2, 3);
+    if (c.tier === "legendary") {
+      const a = clock * 3;
+      ctx.fillStyle = "#fff6c9";
+      ctx.fillRect(c.x + Math.cos(a) * 9 - 0.75, c.y + Math.sin(a) * 7 - 0.75, 1.5, 1.5);
+      ctx.fillRect(c.x - Math.cos(a) * 9 - 0.75, c.y - Math.sin(a) * 7 - 0.75, 1.5, 1.5);
+    }
+  }
+
+  // Les effets des pouvoirs posés au sol : flammes et ondes de givre, sous
+  // les personnages.
+  function drawGroundFx(fx) {
+    if (!fx) return;
+    // Chaque flamme : un halo orange et un cœur jaune qui scintillent, et
+    // qui s'éteignent en rétrécissant. Dessinées en lumière additive, pour
+    // qu'elles éclairent le sol au lieu de le salir.
+    ctx.globalCompositeOperation = "lighter";
+    for (const f of fx.flames) {
+      const k = f.life / f.max;
+      const flicker = 0.85 + 0.15 * Math.sin(clock * 20 + f.x * 3 + f.y);
+      const r = f.r * (0.45 + 0.55 * k) * flicker;
+      ctx.fillStyle = `rgba(255, 80, 10, ${0.25 + 0.35 * k})`;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `rgba(255, 200, 70, ${0.2 + 0.6 * k})`;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y - r * 0.15, r * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = "source-over";
+    for (const w of fx.waves) {
+      ctx.strokeStyle = `rgba(150, 220, 255, ${0.8 * (1 - w.r / w.max)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  // Les effets attachés au joueur : orbes, éclairs, Égide prête.
+  function drawPlayerFx(state) {
+    const fx = state.fx, powers = state.run.powers, p = state.player;
+    if (!fx) return;
+    if (powers.aegis && fx.aegisReady) {
+      ctx.strokeStyle = `rgba(120, 200, 255, ${0.45 + 0.2 * Math.sin(clock * 4)})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size / 2 + 3, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (powers.orb) {
+      for (const o of Powers.orbBodies(state, powers.orb, state.stats)) {
+        ctx.fillStyle = "rgba(190, 150, 255, 0.35)";
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, o.size / 2 + 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#d9c4ff";
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, o.size / 2 - 1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    for (const b of fx.bolts) {
+      // Un éclair en zigzag, redessiné à chaque image.
+      ctx.strokeStyle = "#fff4a8";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(b.x1, b.y1);
+      const n = 5;
+      for (let i = 1; i < n; i++) {
+        const t = i / n;
+        ctx.lineTo(b.x1 + (b.x2 - b.x1) * t + (Math.random() - 0.5) * 8,
+                   b.y1 + (b.y2 - b.y1) * t + (Math.random() - 0.5) * 8);
+      }
+      ctx.lineTo(b.x2, b.y2);
+      ctx.stroke();
+    }
   }
 
   // Une arme posée au sol, qui flotte légèrement.
@@ -334,6 +429,163 @@ const Render = (() => {
         ctx.fillStyle = STYLE.wall;
         ctx.fillRect(-2.5, 2.5, 5, 1.5);
         break;
+
+      // --- Bonus ---
+      case "feather":
+        ctx.strokeStyle = "#e8edf5";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(-3, 4); ctx.quadraticCurveTo(-1, -2, 4, -5);
+        ctx.stroke();
+        ctx.strokeStyle = STYLE.dim;
+        ctx.lineWidth = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(-4, 5); ctx.lineTo(2, -3);
+        ctx.stroke();
+        break;
+      case "whetstone":
+        ctx.fillStyle = "#8a93a6";
+        ctx.fillRect(-4.5, -1.5, 9, 4);
+        ctx.fillStyle = STYLE.sword;
+        ctx.fillRect(-4.5, -1.5, 9, 1);
+        ctx.fillStyle = "#ffd27a";
+        ctx.fillRect(-1, -4.5, 1, 2);
+        ctx.fillRect(1.5, -4, 1, 1.5);
+        break;
+      case "gauntlet":
+        ctx.fillStyle = "#b9c2d3";
+        ctx.fillRect(-3.5, -1, 7, 5);
+        for (let i = 0; i < 4; i++) ctx.fillRect(-3.5 + i * 1.9, -4.5, 1.4, 3.5);
+        ctx.fillStyle = STYLE.chestLid;
+        ctx.fillRect(-3.5, 3, 7, 1.5);
+        break;
+      case "lens":
+        ctx.strokeStyle = "#cfd8e6";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(-1, -1, 3.2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(150, 200, 255, 0.35)";
+        ctx.fill();
+        ctx.strokeStyle = STYLE.chestLid;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(1.5, 1.5); ctx.lineTo(4.5, 4.5);
+        ctx.stroke();
+        break;
+      case "clover":
+        ctx.fillStyle = "#62c46a";
+        for (const [dx, dy] of [[-2, -2], [2, -2], [-2, 1.5], [2, 1.5]]) {
+          ctx.beginPath();
+          ctx.arc(dx, dy - 0.5, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.strokeStyle = "#3d8a44";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, 1); ctx.lineTo(1.5, 5);
+        ctx.stroke();
+        break;
+      case "flask":
+        ctx.fillStyle = "#cfd8e6";
+        ctx.fillRect(-1, -5, 2, 2.5);
+        ctx.fillStyle = STYLE.heart;
+        ctx.beginPath();
+        ctx.arc(0, 1.5, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        ctx.fillRect(-2, 0, 1, 1.5);
+        break;
+
+      // --- Pouvoirs ---
+      case "fireTrail":
+        ctx.fillStyle = "#ff8a3a";
+        ctx.beginPath();
+        ctx.moveTo(0, -5.5);
+        ctx.quadraticCurveTo(4.5, -0.5, 3, 3);
+        ctx.quadraticCurveTo(0, 6, -3, 3);
+        ctx.quadraticCurveTo(-4.5, -0.5, 0, -5.5);
+        ctx.fill();
+        ctx.fillStyle = "#ffe08a";
+        ctx.beginPath();
+        ctx.arc(0, 2, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      case "orb":
+        ctx.strokeStyle = "rgba(190, 150, 255, 0.6)";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.arc(0, 0, 4.2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "#d9c4ff";
+        ctx.beginPath();
+        ctx.arc(3, -3, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = STYLE.player;
+        ctx.fillRect(-1.5, -1.5, 3, 3);
+        break;
+      case "lightning":
+        ctx.fillStyle = "#fff07a";
+        ctx.beginPath();
+        ctx.moveTo(1.5, -5.5); ctx.lineTo(-3, 0.5); ctx.lineTo(0, 0.5);
+        ctx.lineTo(-1.5, 5.5); ctx.lineTo(3, -0.5); ctx.lineTo(0, -0.5);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      case "frost":
+        ctx.strokeStyle = "#9fdcff";
+        ctx.lineWidth = 1.2;
+        for (let i = 0; i < 3; i++) {
+          const a = (i * Math.PI) / 3;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * -5, Math.sin(a) * -5);
+          ctx.lineTo(Math.cos(a) * 5, Math.sin(a) * 5);
+          ctx.stroke();
+        }
+        break;
+      case "aegis":
+        ctx.fillStyle = "#6fb6ff";
+        ctx.beginPath();
+        ctx.moveTo(0, -5); ctx.lineTo(4.5, -3); ctx.lineTo(3.5, 2);
+        ctx.lineTo(0, 5); ctx.lineTo(-3.5, 2); ctx.lineTo(-4.5, -3);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#e8f4ff";
+        ctx.fillRect(-0.75, -3, 1.5, 5);
+        break;
+
+      // --- Reliques ---
+      case "phoenix":
+        ctx.fillStyle = "#ff6a3a";
+        ctx.beginPath();
+        ctx.moveTo(0, -4); ctx.lineTo(5, -5); ctx.lineTo(2.5, 0);
+        ctx.lineTo(0, 5); ctx.lineTo(-2.5, 0); ctx.lineTo(-5, -5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#ffd27a";
+        ctx.fillRect(-1, -2, 2, 3);
+        break;
+      case "hourglass":
+        ctx.fillStyle = STYLE.chestLid;
+        ctx.fillRect(-4, -5, 8, 1.5);
+        ctx.fillRect(-4, 3.5, 8, 1.5);
+        ctx.fillStyle = "#e6d3a0";
+        ctx.beginPath();
+        ctx.moveTo(-3, -3.5); ctx.lineTo(3, -3.5); ctx.lineTo(0, 0);
+        ctx.lineTo(3, 3.5); ctx.lineTo(-3, 3.5); ctx.lineTo(0, 0);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      case "crown":
+        ctx.fillStyle = "#ffc93d";
+        ctx.beginPath();
+        ctx.moveTo(-5, 3.5); ctx.lineTo(-5, -3); ctx.lineTo(-2.5, 0);
+        ctx.lineTo(0, -4.5); ctx.lineTo(2.5, 0); ctx.lineTo(5, -3); ctx.lineTo(5, 3.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = STYLE.heart;
+        ctx.fillRect(-0.75, 0.5, 1.5, 1.5);
+        break;
     }
     ctx.restore();
   }
@@ -386,31 +638,42 @@ const Render = (() => {
     ctx.fillRect(x + h - 2 + p.facing.x * 4, y + h - 2 + p.facing.y * 4, 4, 4);
   }
 
+  // En haut : les cœurs, l'arme en main (en mode glisser, il n'y a pas de
+  // bouton pour la montrer), la menace au milieu, et à droite le butin porté,
+  // ce qu'on risque, avec ce que vaut une gemme ici.
+  // En bas : les pouvoirs et leur niveau, les reliques, et la banque.
   function drawHud(state) {
     const p = state.player;
+    // Au-delà de cinq cœurs, ils se resserrent pour laisser la place à l'arme.
+    const step = p.maxHp > 5 ? 7 : 9, size = p.maxHp > 5 ? 6 : 7;
     for (let i = 0; i < p.maxHp; i++) {
       ctx.fillStyle = i < p.hp ? STYLE.heart : STYLE.heartEmpty;
-      ctx.fillRect(4 + i * 9, 4, 7, 7);
+      ctx.fillRect(4 + i * step, 4 + (7 - size) / 2, size, size);
     }
-    // L'arme en main, juste après les cœurs : en mode glisser, il n'y a pas
-    // de bouton pour la montrer.
-    if (state.run.weapon) drawIcon(state.run.weapon, 4 + p.maxHp * 9 + 6, 8);
+    if (state.run.weapon) drawIcon(state.run.weapon, 4 + p.maxHp * step + 5, 8);
 
-    // Les artefacts trouvés, au milieu de la bande du bas.
-    const arts = state.run.artifacts;
-    const ax = Config.ZONE_W / 2 - ((arts.length - 1) * 12) / 2;
-    arts.forEach((a, i) => drawIcon(a, ax + i * 12, Config.ZONE_H - 8));
+    drawGem(132, 8, 7);
+    text(`${state.run.carried}`, 138, 4, STYLE.text, "left");
+    if (!state.zone.safe && !state.fire) {
+      text(`×${World.gemValue(state.distance)}`, Config.ZONE_W - 4, 4, STYLE.dim, "right");
+    }
 
-    // Butin porté, en jeu : c'est ce qu'on risque.
-    drawGem(Config.ZONE_W - 40, 8, 7);
-    text(`${state.run.carried}`, Config.ZONE_W - 33, 4, STYLE.text, "left");
-
-    // En bas : ce que vaut une gemme ici, et ce qui est déjà à l'abri.
-    const y = Config.ZONE_H - 12;
-    const value = state.zone.safe ? state.zone.name.toLowerCase()
-      : state.fire ? "camp" : `gemme ×${World.gemValue(state.distance)}`;
-    text(value, 4, y, STYLE.dim, "left");
-    text(`banque ${Save.data.bank}`, Config.ZONE_W - 4, y, STYLE.dim, "right");
+    const y = Config.ZONE_H - 8;
+    let x = 10;
+    for (const [key, level] of Object.entries(state.run.powers)) {
+      drawIcon(key, x, y - 1);
+      for (let i = 0; i < Powers.MAX_LEVEL; i++) {
+        ctx.fillStyle = i < level ? STYLE.player : STYLE.heartEmpty;
+        ctx.fillRect(x - 4 + i * 3, y + 5, 2, 1.5);
+      }
+      x += 13;
+    }
+    if (state.run.relics.length) x += 3;
+    for (const key of state.run.relics) {
+      drawIcon(key, x, y);
+      x += 13;
+    }
+    text(`banque ${Save.data.bank}`, Config.ZONE_W - 4, Config.ZONE_H - 12, STYLE.dim, "right");
   }
 
   // La mini-carte montre ce qu'on sait : le camp de base (violet, comme son
@@ -442,7 +705,7 @@ const Render = (() => {
       ctx.fillRect(x, y, cell, cell);
       const chestHere = c.chest && !state.run.opened.has(`${c.x},${c.y}`);
       if (chestHere && (seen || lantern) && !here) {
-        ctx.fillStyle = STYLE.chestLock;
+        ctx.fillStyle = TIERS[c.chest.tier];
         ctx.fillRect(x + 1, y + 1, 2, 2);
       }
       // Les portes d'un écran visité, vers la droite et vers le bas : chaque

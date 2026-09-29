@@ -16,7 +16,8 @@
 // 4. Décors : tirés au sort parmi ceux permis à cette distance, en évitant
 //    de répéter celui d'un voisin.
 // 5. Coffres : une arme de mêlée près du camp de base, une arme à distance
-//    plus loin, et des artefacts ailleurs, un coffre au plus par écran.
+//    plus loin, et des coffres au hasard, de rareté croissante avec la
+//    distance, un par écran au plus.
 // 6. Camp : un seul à la fois, installé dans un écran ordinaire. Quand il a
 //    servi, il s'éteint et moveCamp() en allume un autre ailleurs.
 
@@ -118,22 +119,28 @@ const Generator = (() => {
       c.layout = rng.pick(fresh.length ? fresh : allowed);
     }
 
-    // 5. Coffres. Si une carte n'a pas d'écran assez proche ou assez loin, on
-    //    prend le plus proche de la règle plutôt que de ne rien cacher.
+    // 5. Coffres. Chacun est {tier, item} : `item` est fixé pour les deux
+    //    armes garanties, et null pour les autres, dont le contenu sera tiré
+    //    à l'ouverture (voir Loot). Si une carte n'a pas d'écran assez proche
+    //    ou assez loin, on prend le plus proche de la règle plutôt que de ne
+    //    rien cacher.
     const free = () => wild.filter((c) => !c.chest);
-    const hide = (item, fits, score) => {
+    const hide = (chest, fits, score) => {
       const pool = free();
       if (!pool.length) return;
       const ok = pool.filter(fits);
       const c = ok.length ? rng.pick(ok) : pool.sort((a, b) => score(a) - score(b))[0];
-      c.chest = item;
+      c.chest = chest;
     };
-    hide(rng.pick(LOOT.nearWeapons),
+    hide({ tier: "rare", item: rng.pick(LOOT.nearWeapons) },
       (c) => c.distance <= LOOT.NEAR_MAX, (c) => c.distance);
-    hide(rng.pick(LOOT.farWeapons),
+    hide({ tier: "rare", item: rng.pick(LOOT.farWeapons) },
       (c) => c.distance >= LOOT.FAR_MIN, (c) => -c.distance);
-    for (const item of rng.shuffle(LOOT.artifacts).slice(0, LOOT.ARTIFACTS_PER_MAP)) {
-      hide(item, (c) => c.distance >= 2, (c) => -c.distance);
+    for (let i = 0; i < LOOT.RANDOM_CHESTS; i++) {
+      const pool = free();
+      if (!pool.length) break;
+      const c = rng.pick(pool);
+      c.chest = { tier: Loot.tierFor(c.distance, rng), item: null };
     }
 
     // 6. Le premier camp, à portée : ni collé au camp de base, ni au bout.
