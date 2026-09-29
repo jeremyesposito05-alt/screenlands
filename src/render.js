@@ -95,6 +95,7 @@ const Render = (() => {
     for (const e of state.enemies) drawEnemy(e);
     if (state.hunterComing) drawHunterWarning(state.hunterComing);
     if (state.hunter) drawHunter(state.hunter);
+    drawAllies(state);
     if (state.phase !== "dead") {
       drawPlayer(player);
       drawPlayerFx(state);
@@ -233,6 +234,50 @@ const Render = (() => {
       }
     }
     ctx.globalAlpha = 1;
+  }
+
+  // Les compagnons : un petit personnage de la couleur du joueur, avec ce
+  // qu'il tient. Ceux qui sont à terre clignotent, cerclés du temps qui leur
+  // reste pour être relevés. Puis leurs flèches et leurs coups.
+  const ALLY_COLORS = { archer: "#7fd0ff", warrior: "#d9dde6" };
+  function drawAlly(type, x, y, alpha = 1) {
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = STYLE.player;
+    ctx.fillRect(x - 4, y - 4, 8, 8);
+    ctx.fillStyle = ALLY_COLORS[type];
+    ctx.fillRect(x - 4, y - 4, 8, 3);
+    ctx.globalAlpha = 1;
+  }
+
+  function drawAllies(state) {
+    for (const d of state.downed || []) {
+      if (Math.floor(clock * 8) % 2 === 0) drawAlly(d.type, d.x, d.y, 0.6);
+      ctx.strokeStyle = "rgba(242, 196, 77, 0.8)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, 8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (d.time / Allies.DOWN_TIME));
+      ctx.stroke();
+    }
+    // Du dernier au premier, pour que le premier passe devant.
+    const list = state.run.allies;
+    for (let i = list.length - 1; i >= 0; i--) drawAlly(list[i].type, list[i].x, list[i].y);
+    for (const s of state.allyShots || []) {
+      const d = Math.hypot(s.vx, s.vy) || 1;
+      ctx.strokeStyle = ALLY_COLORS.archer;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(s.x - (s.vx / d) * 4, s.y - (s.vy / d) * 4);
+      ctx.lineTo(s.x + (s.vx / d) * 2, s.y + (s.vy / d) * 2);
+      ctx.stroke();
+    }
+    for (const s of state.slashes || []) {
+      ctx.strokeStyle = `rgba(232, 237, 245, ${s.life / 0.14})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(s.tx, s.ty);
+      ctx.stroke();
+    }
   }
 
   // Les tirs des Tireurs, des billes roses nimbées, et les explosions des
@@ -721,13 +766,23 @@ const Render = (() => {
   // En bas : les pouvoirs et leur niveau, les reliques, et la banque.
   function drawHud(state) {
     const p = state.player;
-    // Au-delà de cinq cœurs, ils se resserrent pour laisser la place à l'arme.
-    const step = p.maxHp > 5 ? 7 : 9, size = p.maxHp > 5 ? 6 : 7;
+    // Au-delà de cinq cœurs et compagnons, ils se resserrent pour laisser la
+    // place à l'arme sans empiéter sur la jauge de menace.
+    const units = p.maxHp + state.run.allies.length;
+    const step = units > 5 ? 7 : 9, size = units > 5 ? 6 : 7;
     for (let i = 0; i < p.maxHp; i++) {
       ctx.fillStyle = i < p.hp ? STYLE.heart : STYLE.heartEmpty;
       ctx.fillRect(4 + i * step, 4 + (7 - size) / 2, size, size);
     }
-    if (state.run.weapon) drawIcon(state.run.weapon, 4 + p.maxHp * step + 5, 8);
+    // Les compagnons comptent comme des cœurs de plus : ils s'affichent juste
+    // après, puis vient l'arme.
+    let hx = 4 + p.maxHp * step;
+    for (const a of state.run.allies) {
+      ctx.fillStyle = ALLY_COLORS[a.type];
+      ctx.fillRect(hx + 1, 4 + (7 - size) / 2, size - 1, size);
+      hx += step - 1;
+    }
+    if (state.run.weapon) drawIcon(state.run.weapon, hx + 5, 8);
 
     drawGem(132, 8, 7);
     text(`${state.run.carried}`, 138, 4, STYLE.text, "left");

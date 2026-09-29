@@ -103,9 +103,20 @@ graphismes.
   rebondit au niveau 3), **Onde de givre** (ralentit, puis blesse),
   **Égide** (absorbe un coup, puis se recharge). Ils s'affichent en bas avec
   leur niveau.
-- **Trois cœurs.** On garde son équipement tant qu'on est en vie. Mourir fait
-  perdre le butin porté et tout l'équipement, et ramène au camp de base sur
-  une nouvelle carte.
+- **Des compagnons** (prototype), à la manière des options des jeux d'avion :
+  l'**Archer** tire sur l'ennemi le plus proche, le **Guerrier** frappe ce
+  qui approche. Jusqu'à quatre suivent le joueur en file, sur sa trajectoire
+  exacte, comme un serpent. Ils font mal, mais moins que le joueur. On les
+  trouve dans les coffres rares.
+
+  Ils servent aussi d'armure : **un coup reçu fait tomber le dernier de la
+  file au lieu de coûter un cœur**. Le compagnon tombé reste sonné trois
+  secondes ; repasser dessus le relève, sinon il est perdu. Armes, pouvoirs
+  et reliques, eux, ne se perdent jamais sur un coup.
+- **Trois cœurs**, qui ne comptent que quand il n'y a plus de compagnon. On
+  garde son équipement tant qu'on est en vie. Mourir fait perdre le butin
+  porté et tout l'équipement, et ramène au camp de base sur une nouvelle
+  carte.
 - **Le camp de base** n'est qu'un point de départ, sans feu. Son portail
   lance une nouvelle expédition quand on a vidé la carte : on y garde le
   butin porté, pas l'équipement, sinon on accumulerait les artefacts de
@@ -212,6 +223,7 @@ src/enemies.js       les ennemis : visée, capacité et statistiques assemblées
 src/save.js          la progression permanente (la banque)
 src/input.js         clavier et tactile : modes glisser et joystick
 src/weapons.js       les armes en action : coups de mêlée et projectiles
+src/allies.js        les compagnons : la file, leurs attaques, la chute et le relèvement
 src/world.js         l'expédition et ses règles : gemmes, coups, camps, transitions
 src/render.js        tout ce qui dessine, et rien d'autre
 src/menu.js          menu principal, pause et outils du bac à sable

@@ -86,6 +86,8 @@ const World = (() => {
       artifacts: [],
       powers: {},
       relics: [],
+      // La file des compagnons, du premier au dernier (voir Allies).
+      allies: [],
       // Secondes pendant lesquelles le Sablier fige la menace.
       threatFrozen: 0,
       // Le Gardien de cette carte est-il vaincu ?
@@ -144,6 +146,7 @@ const World = (() => {
     r.artifacts = [];
     r.powers = {};
     r.relics = [];
+    r.allies = [];
     r.threat = 0;
     r.threatFrozen = 0;
     r.bossDead = false;
@@ -207,6 +210,7 @@ const World = (() => {
     state.projectiles = [];
     p.attack = 0;
     Powers.clearZone(state.fx);
+    Allies.clearZone(state);
 
     const value = gemValue(distance);
     state.gems = zone.gems
@@ -493,6 +497,7 @@ const World = (() => {
     if (attack && state.run.weapon) Weapons.use(state, Stats.weapon(ITEMS[state.run.weapon], state.stats));
     Weapons.update(state, dt, { kill, collect: pickUp });
     Powers.update(state, dt, state.run.powers, state.stats, { damage: damageEnemy });
+    Allies.update(state, dt, state.stats, { damage: damageEnemy });
 
     attractGems(dt);
     state.gems = state.gems.filter((g) => {
@@ -673,6 +678,13 @@ const World = (() => {
       case "consumable":
         if (key === "flask") p.hp = Math.min(p.maxHp, p.hp + 1);
         break;
+      case "ally":
+        // File pleine : le compagnon repart, mais soigne en passant.
+        if (!Allies.add(state, key)) {
+          p.hp = Math.min(p.maxHp, p.hp + 1);
+          title = `${item.name} : file complète`;
+        }
+        break;
       default:
         r.artifacts.push(key);
     }
@@ -750,6 +762,14 @@ const World = (() => {
       state.popups.push({ x: p.x, y: p.y - 6, text: "bloqué", time: 0.7 });
       return;
     }
+    // Un compagnon tombe à la place du joueur : pas de cœur perdu, mais le
+    // même recul et le même répit, le temps de revenir le relever.
+    if (Allies.absorb(state)) {
+      p.invuln = Config.HURT_INVULN;
+      state.popups.push({ x: p.x, y: p.y - 6, text: "compagnon à terre", time: 0.9 });
+      knockBack(enemy);
+      return;
+    }
     p.hp -= enemy.damage;
     p.invuln = Config.HURT_INVULN;
 
@@ -757,9 +777,13 @@ const World = (() => {
       die();
       return;
     }
+    knockBack(enemy);
+  }
 
-    // Recul : le joueur est repoussé à l'opposé de l'ennemi, sur l'axe où ils
-    // sont le plus écartés, sans traverser les murs.
+  // Recul : le joueur est repoussé à l'opposé de ce qui l'a touché, sur l'axe
+  // où ils sont le plus écartés, sans traverser les murs.
+  function knockBack(enemy) {
+    const p = state.player;
     const dx = p.x - enemy.x;
     const dy = p.y - enemy.y;
     if (Math.abs(dx) >= Math.abs(dy)) {
@@ -879,8 +903,11 @@ const World = (() => {
       r.artifacts = [];
       r.powers = {};
       r.relics = [];
+      r.allies = [];
       recomputeStats();
     },
+    addAlly(type) { Allies.add(state, type); },
+    clearAllies() { state.run.allies = []; state.downed = []; },
     heal() { state.player.hp = state.player.maxHp; },
     // Un ennemi au point d'apparition le plus éloigné du joueur, réveillé
     // tout de suite.
@@ -940,7 +967,7 @@ const World = (() => {
     },
     newMap() {
       const r = state.run;
-      const keep = { weapon: r.weapon, artifacts: r.artifacts, powers: r.powers, relics: r.relics };
+      const keep = { weapon: r.weapon, artifacts: r.artifacts, powers: r.powers, relics: r.relics, allies: r.allies };
       newMap();
       Object.assign(r, keep);
       recomputeStats();

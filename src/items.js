@@ -14,7 +14,9 @@
 // - `power` : un pouvoir qui agit tout seul, à la Vampire Survivors, et qui
 //   monte de niveau quand on en retrouve un (voir Powers) ;
 // - `relic` : un objet légendaire unique, à l'effet spécial ;
-// - `consumable` : pris et consommé aussitôt.
+// - `consumable` : pris et consommé aussitôt ;
+// - `ally` : un compagnon qui rejoint la file derrière le joueur, attaque
+//   seul, et tombe à sa place quand il est touché (voir Allies).
 //
 // Les effets sur les caractéristiques sont décrits par `mods`, que Stats
 // additionne : speed et damage en fraction (+0,1 = +10 %), haste pour la
@@ -82,6 +84,10 @@ const ITEMS = {
   frost: { name: "Onde de givre", hint: "ralentit tout autour de toi", type: "power" },
   aegis: { name: "Égide", hint: "absorbe un coup, puis se recharge", type: "power" },
 
+  // --- Compagnons (coffres rares), réglés dans Allies ---
+  archer: { name: "Archer", hint: "te suit et tire sur l'ennemi proche", type: "ally" },
+  warrior: { name: "Guerrier", hint: "te suit et frappe ce qui approche", type: "ally" },
+
   // --- Reliques (coffres légendaires), uniques ---
   phoenix: { name: "Cœur de phénix", hint: "tu reviendras une fois de la mort", type: "relic" },
   hourglass: { name: "Sablier", hint: "menace −2 min, puis figée 1 min", type: "relic" },
@@ -103,6 +109,7 @@ const LOOT = {
   commons: ["feather", "whetstone", "gauntlet", "lens", "clover", "magnet", "flask"],
   rareArtifacts: ["heart", "boots", "lantern"],
   powers: ["fireTrail", "orb", "lightning", "frost", "aegis"],
+  allies: ["archer", "warrior"],
   relics: ["phoenix", "hourglass", "crown"],
   weapons: ["sword", "spear", "bow", "boomerang"],
 
