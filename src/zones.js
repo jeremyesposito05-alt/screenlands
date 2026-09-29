@@ -182,6 +182,9 @@ const ZoneRegistry = (() => {
     // Le camp brûle-t-il dans cet écran ? Il n'y en a qu'un à la fois.
     isCamp(cx, cy) { return !!map.camp && map.camp.x === cx && map.camp.y === cy; },
     get camp() { return map.camp; },
+    // L'écran du Gardien, le mini-boss du bout de la carte.
+    get boss() { return map.boss; },
+    isBoss(cx, cy) { return !!map.boss && map.boss.x === cx && map.boss.y === cy; },
     // Tous les écrans, pour la mini-carte.
     cells() { return map.cells.values(); },
   };

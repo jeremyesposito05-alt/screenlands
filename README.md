@@ -52,6 +52,23 @@ graphismes.
   Ils trouvent leur chemin autour des obstacles, sont plus lents que le
   joueur, et plus nombreux et plus rapides à mesure qu'on s'éloigne. Aucun
   près des camps.
+- **Le reste du bestiaire**, qui change la façon de jouer :
+  - le **Tireur** (vert, dès 2 écrans) garde ses distances, vise une
+    demi-seconde en clignotant, puis tire ; ses tirs s'arrêtent aux murs ;
+  - le **Kamikaze** (rouge sombre, dès 3 écrans) fonce, allume sa mèche près
+    du joueur et explose ; l'explosion blesse aussi les ennemis autour, et
+    tué avant, il n'explose pas ;
+  - l'**Essaim** (jaune, dès 3 écrans) : quatre petits ennemis rapides qui
+    encerclent le joueur ; un coup suffit à chacun, et il ne compte que pour
+    un mort et une gemme ;
+  - le **Colosse** (brun, dès 4 écrans) : lent, 5 points de vie, et les
+    coups ne le font pas reculer ;
+  - le **Gardien**, le mini-boss : un par carte, dans un des écrans les plus
+    éloignés, marqué en rouge sur la mini-carte dès le départ. Il prévient,
+    puis charge en ligne droite ; vaincu, il lâche un coffre légendaire.
+
+  Chaque ennemi assemble une règle de visée, une capacité (tirer, exploser,
+  charger) et ses statistiques (`src/enemies.js`).
 - **On part les mains vides**, et on fouille la carte. Dix coffres y sont
   cachés, un par écran au plus, dans un recoin du décor. Deux contiennent
   toujours une arme :
@@ -191,7 +208,7 @@ src/stats.js         les caractéristiques du joueur, calculées à un seul endr
 src/powers.js        les pouvoirs automatiques
 src/loot.js          la rareté des coffres et le tirage de leur contenu
 src/nav.js           plus court chemin des ennemis autour des obstacles
-src/enemies.js       les ennemis : des fiches qui choisissent une règle de visée
+src/enemies.js       les ennemis : visée, capacité et statistiques assemblées
 src/save.js          la progression permanente (la banque)
 src/input.js         clavier et tactile : modes glisser et joystick
 src/weapons.js       les armes en action : coups de mêlée et projectiles

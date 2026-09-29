@@ -21,6 +21,13 @@ const Render = (() => {
     ambusher: "#e889c0",
     pincer: "#5f9df0",
     shy: "#e89a4c",
+    // Le reste du bestiaire.
+    shooter: "#6fcf8a",
+    bomber: "#b8323a",
+    swarm: "#e3e05a",
+    brute: "#8d6a4c",
+    guardian: "#7a1f3d",
+    bullet: "#ff7ab8",
     eye: "#f4f6fa",
     hunter: "#2a1236",
     hunterEye: "#ff3b5c",
@@ -94,6 +101,7 @@ const Render = (() => {
     }
     if (state.swing) drawSwing(state.swing, player);
     for (const s of state.projectiles) drawProjectile(s);
+    drawEnemyShots(state);
 
     for (const pop of state.popups) {
       text(pop.text, pop.x, pop.y - 8, pop.tier ? TIERS[pop.tier] : STYLE.gem, "center");
@@ -154,14 +162,58 @@ const Render = (() => {
     const x = Math.round(e.x - h), y = Math.round(e.y - h);
     // Endormi à l'entrée de la zone : dessiné terne.
     ctx.globalAlpha = e.wake > 0 ? 0.45 : 1;
-    // Touché : il clignote en blanc pendant qu'il est étourdi.
-    const flash = e.stun > 0 && Math.floor(clock * 20) % 2 === 0;
+    // Touché : il clignote en blanc pendant qu'il est étourdi. Mèche allumée,
+    // il clignote de plus en plus vite.
+    const flash = (e.stun > 0 && Math.floor(clock * 20) % 2 === 0) ||
+                  (e.fuse > 0 && Math.floor(clock * (10 + 30 * (1 - e.fuse / 0.7))) % 2 === 0);
     ctx.fillStyle = flash ? STYLE.hitFlash : STYLE[e.kind];
-    ctx.fillRect(x, y, e.size, e.size);
-    if (e.hp > 1 && !flash) {
+    if (e.kind === "bomber" || e.kind === "swarm") {
+      // Les ronds : le Kamikaze et les membres d'essaim.
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, h, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillRect(x, y, e.size, e.size);
+    }
+    if (e.kind === "bomber" && !flash) {
+      // La mèche, une étincelle qui danse.
+      ctx.fillStyle = e.fuse > 0 ? "#fff3a0" : "#f0a040";
+      ctx.fillRect(e.x + 1 + Math.sin(clock * 30) * 0.8, e.y - h - 2, 2, 2);
+    }
+    if (e.kind === "guardian" && !flash) {
+      // La couronne du Gardien.
+      ctx.fillStyle = "#ffc93d";
+      ctx.beginPath();
+      ctx.moveTo(x + 2, y + 1); ctx.lineTo(x + 2, y - 4); ctx.lineTo(x + 5, y - 1);
+      ctx.lineTo(e.x, y - 5); ctx.lineTo(x + e.size - 5, y - 1);
+      ctx.lineTo(x + e.size - 2, y - 4); ctx.lineTo(x + e.size - 2, y + 1);
+      ctx.closePath();
+      ctx.fill();
+    }
+    if (e.hp > 1 && !flash && e.kind !== "guardian" && e.kind !== "brute") {
       ctx.strokeStyle = STYLE.tough;
       ctx.lineWidth = 1;
       ctx.strokeRect(x + 0.5, y + 0.5, e.size - 1, e.size - 1);
+    }
+    // Il prépare quelque chose (un tir, une charge) : un cadre blanc qui
+    // clignote, le temps de réagir.
+    if (e.windup > 0 && Math.floor(clock * 16) % 2 === 0) {
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x - 2, y - 2, e.size + 4, e.size + 4);
+    }
+    // En pleine charge, une traînée derrière lui.
+    if (e.dashing > 0 && e.dashDir) {
+      ctx.fillStyle = "rgba(255, 90, 90, 0.35)";
+      ctx.fillRect(x - e.dashDir.x * 10, y - e.dashDir.y * 10, e.size, e.size);
+    }
+    // Les solides ont une barre de vie, dès qu'ils sont entamés.
+    if ((e.kind === "brute" || e.kind === "guardian" || e.maxHp >= 4) && e.hp < e.maxHp) {
+      const w = Math.max(12, e.size);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.fillRect(e.x - w / 2, y - 5, w, 2);
+      ctx.fillStyle = e.kind === "guardian" ? "#ffc93d" : STYLE.heart;
+      ctx.fillRect(e.x - w / 2, y - 5, w * Math.max(0, e.hp / e.maxHp), 2);
     }
     // Une élite porte une couronne dorée qui scintille.
     if (e.elite && !flash) {
@@ -170,8 +222,8 @@ const Render = (() => {
       ctx.strokeRect(x - 1.5, y - 1.5, e.size + 3, e.size + 3);
     }
     // Deux yeux qui regardent où il va, comme les fantômes : c'est ce qui
-    // trahit son intention.
-    if (!flash) {
+    // trahit son intention. Les membres d'essaim sont trop petits pour ça.
+    if (!flash && e.kind !== "swarm") {
       const lx = e.look.x * 1.5, ly = e.look.y * 1.5;
       for (const ox of [-2.5, 2.5]) {
         ctx.fillStyle = STYLE.eye;
@@ -181,6 +233,31 @@ const Render = (() => {
       }
     }
     ctx.globalAlpha = 1;
+  }
+
+  // Les tirs des Tireurs, des billes roses nimbées, et les explosions des
+  // Kamikazes, un anneau qui s'élargit.
+  function drawEnemyShots(state) {
+    for (const b of state.bullets || []) {
+      ctx.fillStyle = "rgba(255, 122, 184, 0.35)";
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = STYLE.bullet;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    for (const x of state.blasts || []) {
+      const k = x.life / 0.35;
+      ctx.fillStyle = `rgba(255, 150, 60, ${0.45 * k})`;
+      ctx.beginPath();
+      ctx.arc(x.x, x.y, x.r * (1.1 - 0.4 * k), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(255, 230, 150, ${k})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
   }
 
   // Le Chasseur : plus grand que les autres, sombre, entouré d'un halo qui
@@ -688,7 +765,10 @@ const Render = (() => {
     const visited = (x, y) => state.visited.has(`${x},${y}`);
     const lantern = World.has("lantern");
     const isBase = (c) => c.x === ZoneRegistry.base.x && c.y === ZoneRegistry.base.y;
-    const known = (c) => lantern || visited(c.x, c.y) || isBase(c) ||
+    // Le Gardien est connu d'avance, en rouge, tant qu'il vit : c'est le but
+    // du bout de la carte.
+    const bossAt = (c) => ZoneRegistry.isBoss(c.x, c.y) && !state.run.bossDead;
+    const known = (c) => lantern || visited(c.x, c.y) || isBase(c) || bossAt(c) ||
       (c.links.left && visited(c.x - 1, c.y)) || (c.links.right && visited(c.x + 1, c.y)) ||
       (c.links.up && visited(c.x, c.y - 1)) || (c.links.down && visited(c.x, c.y + 1));
 
@@ -701,7 +781,7 @@ const Render = (() => {
       const here = c.x === state.coords.x && c.y === state.coords.y;
       const seen = visited(c.x, c.y);
       ctx.fillStyle = here ? STYLE.mapHere : ZoneRegistry.isCamp(c.x, c.y) ? STYLE.mapCamp
-        : isBase(c) ? STYLE.portal : seen ? STYLE.mapSeen : STYLE.mapFog;
+        : bossAt(c) ? STYLE.heart : isBase(c) ? STYLE.portal : seen ? STYLE.mapSeen : STYLE.mapFog;
       ctx.fillRect(x, y, cell, cell);
       const chestHere = c.chest && !state.run.opened.has(`${c.x},${c.y}`);
       if (chestHere && (seen || lantern) && !here) {

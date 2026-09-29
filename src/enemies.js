@@ -5,14 +5,20 @@
 // L'idée vient des fantômes de Pac-Man : ils se déplacent tous de la même
 // façon, et ne diffèrent que par le point qu'ils visent. L'un vise le joueur,
 // l'autre la case devant lui, le troisième se sert du premier pour prendre
-// le joueur en tenaille, le dernier s'approche puis recule. Quatre règles
-// d'une ligne suffisent à ce que le groupe semble jouer ensemble.
+// le joueur en tenaille, le dernier s'approche puis recule.
 //
-// Un type d'ennemi est donc une fiche (TYPES) qui choisit une règle de visée
-// dans TARGETS et règle ses statistiques. Ajouter un ennemi, c'est écrire une
-// fiche ; ajouter une façon de viser, c'est écrire une règle, que toutes les
-// fiches peuvent ensuite reprendre. Le déplacement, lui, est commun à tous :
-// le plus court chemin vers la cible, calculé par Nav.
+// Un type d'ennemi est donc une fiche (TYPES) qui assemble trois briques :
+// - une règle de visée, dans TARGETS : où il veut aller ;
+// - une capacité facultative, dans ABILITIES : tirer, exploser, charger ;
+// - des statistiques : taille, points de vie, vitesse, et `heavy` pour ceux
+//   que les coups ne font pas reculer.
+// Ajouter un ennemi, c'est écrire une fiche ; ajouter une manœuvre ou une
+// capacité, c'est écrire une règle que toutes les fiches peuvent reprendre.
+// Le déplacement est commun à tous : le plus court chemin vers la cible,
+// calculé par Nav pour leur taille.
+//
+// Ce module ne sait ni blesser le joueur ni créer de projectile : il passe
+// par les crochets `ctx.fire` et `ctx.explode` que fournit World.
 
 const Enemies = (() => {
   const SHY_RADIUS = Config.TILE * 4;
@@ -28,8 +34,9 @@ const Enemies = (() => {
 
   const near = (e, p, r) => Math.hypot(p.x - e.x, p.y - e.y) < r;
 
-  // Une règle de visée reçoit l'ennemi, le joueur et les ennemis de la zone,
-  // et renvoie le point vers lequel il se dirige.
+  // --- Règles de visée ---
+  // Chacune reçoit l'ennemi, le joueur et les ennemis de la zone, et renvoie
+  // le point vers lequel il se dirige.
   const TARGETS = {
     // Le joueur lui-même. Le plus simple, et le plus tenace.
     player(e, p) {
@@ -63,24 +70,125 @@ const Enemies = (() => {
       if (!near(e, p, SHY_RADIUS)) return { x: p.x, y: p.y };
       return { x: e.home.x, y: e.home.y };
     },
+
+    // Garde ses distances : recule si le joueur approche, s'avance s'il
+    // s'éloigne, et reste en place entre les deux, pour tirer.
+    keepAway(e, p) {
+      const d = Math.hypot(e.x - p.x, e.y - p.y) || 1;
+      if (d < 64) return { x: p.x + ((e.x - p.x) / d) * 96, y: p.y + ((e.y - p.y) / d) * 96 };
+      if (d > 112) return { x: p.x, y: p.y };
+      return { x: e.x, y: e.y };
+    },
+
+    // Chaque membre d'un essaim vise un point autour du joueur, sur un cercle
+    // qui tourne : ensemble, ils l'encerclent au lieu de s'empiler. Le cercle
+    // respire, chacun à son rythme : il se resserre assez pour mordre, puis
+    // s'écarte.
+    swarm(e, p) {
+      const a = e.angle + e.age * 1.6;
+      const r = 11 + 9 * Math.sin(e.age * 2.4 + e.angle * 1.7);
+      return { x: p.x + Math.cos(a) * r, y: p.y + Math.sin(a) * r };
+    },
+  };
+
+  // --- Capacités ---
+  // Chacune est appelée à chaque pas, avant le déplacement ; si elle renvoie
+  // true, l'ennemi ne se déplace pas ce pas-ci (il vise, il va exploser, il
+  // charge déjà).
+  const ABILITIES = {
+    // Vise une demi-seconde (il clignote), puis tire vers le joueur.
+    shoot(e, ctx, dt, a) {
+      e.cooldown -= dt;
+      if (e.windup > 0) {
+        e.windup -= dt;
+        if (e.windup <= 0) {
+          const p = ctx.player;
+          const d = Math.hypot(p.x - e.x, p.y - e.y) || 1;
+          ctx.fire(e, { x: (p.x - e.x) / d, y: (p.y - e.y) / d }, a.bulletSpeed);
+          e.cooldown = a.cooldown;
+        }
+        return true;
+      }
+      if (e.cooldown <= 0 && near(e, ctx.player, a.range)) {
+        e.windup = a.windup;
+        return true;
+      }
+      return false;
+    },
+
+    // Près du joueur, allume sa mèche, s'arrête, clignote, et explose.
+    explode(e, ctx, dt, a) {
+      if (e.fuse > 0) {
+        e.fuse -= dt;
+        if (e.fuse <= 0) ctx.explode(e, a.radius, a.enemyDamage);
+        return true;
+      }
+      if (near(e, ctx.player, a.trigger)) {
+        e.fuse = a.fuse;
+        return true;
+      }
+      return false;
+    },
+
+    // S'arrête, prévient, puis charge en ligne droite vers le joueur.
+    dash(e, ctx, dt, a) {
+      e.cooldown -= dt;
+      if (e.dashing > 0) {
+        e.dashing -= dt;
+        const d = e.dashDir;
+        if (Physics.moveAxis(e, d.x ? "x" : "y", (d.x || d.y) * a.speed * dt, ctx.solids)) e.dashing = 0;
+        return true;
+      }
+      if (e.windup > 0) {
+        e.windup -= dt;
+        if (e.windup <= 0) {
+          const p = ctx.player;
+          const dx = p.x - e.x, dy = p.y - e.y;
+          e.dashDir = Math.abs(dx) >= Math.abs(dy) ? { x: Math.sign(dx) || 1, y: 0 } : { x: 0, y: Math.sign(dy) || 1 };
+          e.look = e.dashDir;
+          e.dashing = a.time;
+          e.cooldown = a.every;
+        }
+        return true;
+      }
+      if (e.cooldown <= 0) {
+        e.windup = a.windup;
+        return true;
+      }
+      return false;
+    },
   };
 
   // `from` : distance au camp de base à partir de laquelle il apparaît.
   // `speed` s'ajoute à la vitesse commune, qui croît déjà avec la distance.
+  // `group` : combien d'individus pour une place de la liste (l'essaim).
   const TYPES = {
     chaser: { name: "Traqueur", kind: "chaser", from: 1, size: 10, hp: 1, damage: 1, speed: 0, target: "player" },
     ambusher: { name: "Embusqueur", kind: "ambusher", from: 2, size: 10, hp: 1, damage: 1, speed: 6, target: "ahead", lunges: true },
+    shooter: {
+      name: "Tireur", kind: "shooter", from: 2, size: 10, hp: 1, damage: 1, speed: -6, target: "keepAway",
+      ability: { name: "shoot", cooldown: 2.2, windup: 0.45, range: 150, bulletSpeed: 95 },
+    },
     shy: { name: "Craintif", kind: "shy", from: 3, size: 10, hp: 2, damage: 1, speed: 8, target: "shy" },
+    bomber: {
+      name: "Kamikaze", kind: "bomber", from: 3, size: 9, hp: 1, damage: 1, speed: 14, target: "player",
+      ability: { name: "explode", trigger: 22, fuse: 0.7, radius: 28, enemyDamage: 2 },
+    },
+    // `fragile` : ses points de vie ne grossissent pas avec la distance ; un
+    // coup suffit toujours.
+    swarm: { name: "Essaim", kind: "swarm", from: 3, size: 6, hp: 0.5, damage: 1, speed: 18, target: "swarm", group: 4, fragile: true },
     pincer: { name: "Tenailleur", kind: "pincer", from: 4, size: 10, hp: 1, damage: 1, speed: 2, target: "pincer", lunges: true },
-    // Le Chasseur n'est jamais tiré dans une zone (`from` infini) : World le
-    // fait venir au dernier palier de menace. Invincible, il ne se laisse
-    // même pas étourdir.
+    brute: { name: "Colosse", kind: "brute", from: 4, size: 12, hp: 5, damage: 1, speed: -14, target: "player", heavy: true },
+    // Le Gardien n'est jamais tiré au hasard : Generator en place un au bout
+    // de chaque carte.
+    guardian: {
+      name: "Gardien", kind: "guardian", from: Infinity, size: 14, hp: 16, damage: 1, speed: -10, target: "player", heavy: true,
+      ability: { name: "dash", every: 3.2, windup: 0.6, speed: 165, time: 0.45 },
+    },
+    // Le Chasseur non plus : World le fait venir au dernier palier de menace.
+    // Invincible, il ne se laisse même pas étourdir.
     hunter: { name: "Chasseur", kind: "hunter", from: Infinity, size: 10, hp: Infinity, damage: 1, speed: 0, target: "player" },
   };
-
-  // Tous les ennemis ont la même taille : une seule grille de navigation par
-  // zone suffit.
-  const SIZE = 10;
 
   // La composition d'une zone : `count` types tirés parmi ceux permis à
   // cette distance. Le premier est toujours un Traqueur, qui donne son sens
@@ -94,10 +202,12 @@ const Enemies = (() => {
   }
 
   // `opts.elite` : une élite a deux fois plus de points de vie, plus un, et
-  // court plus vite. `opts.speed` s'ajoute à la vitesse (la menace).
+  // court plus vite. `opts.speed` s'ajoute à la vitesse (la menace). `opts.hp`
+  // remplace les points de vie de départ (le Gardien, qui grossit avec la
+  // carte).
   function spawn(type, at, distance, opts = {}) {
     const t = TYPES[type];
-    let hp = t.hp + Math.floor(distance / Config.ENEMY_HP_EVERY);
+    let hp = (opts.hp ?? t.hp) + (t.fragile ? 0 : Math.floor(distance / Config.ENEMY_HP_EVERY));
     let speed = Config.ENEMY_SPEED + t.speed + Config.ENEMY_SPEED_PER_DISTANCE * distance + (opts.speed || 0);
     if (opts.elite) {
       hp = hp * 2 + 1;
@@ -107,11 +217,16 @@ const Enemies = (() => {
       kind: t.kind,
       type,
       elite: !!opts.elite,
+      heavy: !!t.heavy,
+      // La place qu'il occupe dans la liste de la zone : les membres d'un
+      // essaim la partagent, et ne comptent pour un mort qu'au dernier.
+      slot: opts.slot,
       x: at.x,
       y: at.y,
       home: { x: at.x, y: at.y },
       size: t.size,
       hp,
+      maxHp: hp,
       damage: t.damage,
       speed,
       wake: Config.ENEMY_WAKE,
@@ -127,20 +242,48 @@ const Enemies = (() => {
       lunge: 0,
       lastX: null,
       lastY: null,
+      // Capacités : délai avant la prochaine, préparation (le clignotement
+      // d'avertissement), mèche, charge en cours.
+      cooldown: t.ability ? t.ability.cooldown ?? t.ability.every ?? 0 : 0,
+      windup: 0,
+      fuse: 0,
+      dashing: 0,
+      dashDir: null,
+      // L'essaim : place sur le cercle, et âge pour le faire tourner.
+      angle: 0,
+      age: 0,
     };
+  }
+
+  // Tous les individus d'une place de la liste : un seul en général, quatre
+  // pour un essaim, répartis autour du point d'apparition.
+  function spawnGroup(type, at, distance, opts = {}) {
+    const n = TYPES[type].group || 1;
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const r = n > 1 ? 7 : 0;
+      const e = spawn(type, { x: at.x + Math.cos(a) * r, y: at.y + Math.sin(a) * r }, distance, opts);
+      e.angle = a;
+      out.push(e);
+    }
+    return out;
   }
 
   // Un ennemi qui peut faire mal : réveillé et pas étourdi.
   function harmful(e) {
-    return e.wake <= 0 && e.stun <= 0;
+    return e.wake <= 0 && e.stun <= 0 && e.hp > 0;
   }
 
   // Encaisse un coup venu de `dir` et renvoie true s'il en meurt. Sans
   // direction (flammes, éclair), pas de recul, et un étourdissement bref :
-  // juste le temps de clignoter.
+  // juste le temps de clignoter. Les lourds (Colosse, Gardien) ne reculent
+  // jamais et ne sont qu'à peine interrompus.
   function hit(e, dir, solids, damage = 1, knockback = Config.ENEMY_KNOCKBACK) {
     e.hp -= damage;
-    if (dir && knockback) {
+    if (e.heavy) {
+      stun(e, 0.12);
+    } else if (dir && knockback) {
       stun(e, Config.ENEMY_STUN);
       Physics.moveAxis(e, dir.x ? "x" : "y", (dir.x || dir.y) * knockback, solids);
     } else {
@@ -150,16 +293,21 @@ const Enemies = (() => {
   }
 
   // Étourdi sans être blessé : immobile et inoffensif pendant `time`. Le
-  // Chasseur, lui, ne s'arrête jamais.
+  // Chasseur, lui, ne s'arrête jamais. Un étourdissement coupe aussi une
+  // visée, une charge ou une mèche : bien placé, le boomerang sauve la mise.
   function stun(e, time) {
     if (e.type === "hunter") return;
     e.stun = Math.max(e.stun, time);
     e.wake = 0;
     e.lunge = 0;
     e.waypoint = null;
+    e.windup = 0;
+    e.dashing = 0;
+    if (time >= Config.ENEMY_STUN) e.fuse = 0;
   }
 
-  function step(e, player, others, dt, nav, solids) {
+  // `ctx` : {player, others, navFor(size), solids, fire, explode}.
+  function step(e, ctx, dt) {
     if (e.stun > 0) {
       e.stun -= dt;
       return;
@@ -168,16 +316,19 @@ const Enemies = (() => {
       e.wake -= dt;
       return;
     }
+    e.age += dt;
+    const player = ctx.player;
+    const type = TYPES[e.type];
+    if (type.ability && ABILITIES[type.ability.name](e, ctx, dt, type.ability)) return;
 
     // Une cible hors de l'écran (devant un joueur qui regarde une porte, par
     // exemple) est ramenée à l'intérieur des murs.
-    const type = TYPES[e.type];
     let raw;
     if (e.lunge > 0) {
       e.lunge -= dt;
       raw = { x: player.x, y: player.y };
     } else {
-      raw = TARGETS[type.target](e, player, others);
+      raw = TARGETS[type.target](e, player, ctx.others);
     }
     const m = Config.WALL + e.size / 2;
     const target = {
@@ -196,7 +347,7 @@ const Enemies = (() => {
     e.replan -= dt;
     const w = e.waypoint;
     if (!w || e.replan <= 0 || (Math.abs(w.x - e.x) < 0.5 && Math.abs(w.y - e.y) < 0.5)) {
-      e.waypoint = Nav.nextStep(nav, e, target);
+      e.waypoint = Nav.nextStep(ctx.navFor(e.size), e, target);
       e.replan = REPLAN;
     }
 
@@ -212,9 +363,9 @@ const Enemies = (() => {
       if (Math.abs(d) < 0.01) continue;
       const s = Math.sign(d);
       e.look = axis === "x" ? { x: s, y: 0 } : { x: 0, y: s };
-      if (!Physics.moveAxis(e, axis, s * Math.min(budget, Math.abs(d)), solids)) break;
+      if (!Physics.moveAxis(e, axis, s * Math.min(budget, Math.abs(d)), ctx.solids)) break;
     }
   }
 
-  return { TYPES, SIZE, roster, spawn, step, hit, stun, harmful };
+  return { TYPES, roster, spawn, spawnGroup, step, hit, stun, harmful };
 })();

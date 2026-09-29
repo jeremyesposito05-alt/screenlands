@@ -18,7 +18,8 @@
 // 5. Coffres : une arme de mêlée près du camp de base, une arme à distance
 //    plus loin, et des coffres au hasard, de rareté croissante avec la
 //    distance, un par écran au plus.
-// 6. Camp : un seul à la fois, installé dans un écran ordinaire. Quand il a
+// 6. Gardien : un mini-boss dans un des écrans les plus éloignés.
+// 7. Camp : un seul à la fois, installé dans un écran ordinaire. Quand il a
 //    servi, il s'éteint et moveCamp() en allume un autre ailleurs.
 
 const Generator = (() => {
@@ -143,11 +144,16 @@ const Generator = (() => {
       c.chest = { tier: Loot.tierFor(c.distance, rng), item: null };
     }
 
-    // 6. Le premier camp, à portée : ni collé au camp de base, ni au bout.
+    // 6. Le Gardien, le mini-boss, dans un des écrans les plus éloignés : le
+    //    bout de la carte a toujours quelque chose à défendre.
+    const bossCell = rng.pick(wild.filter((c) => c.distance === far));
+
+    // 7. Le premier camp, à portée : ni collé au camp de base, ni au bout.
     //    Les suivants seront tirés par moveCamp(), avec leur propre hasard
     //    à graine, pour qu'une même carte déroule toujours la même suite de
-    //    camps.
+    //    camps. Jamais dans l'écran du Gardien.
     const map = { seed, size, base, cells, depth: far, camp: null,
+                  boss: { x: bossCell.x, y: bossCell.y },
                   campRng: makeRandom(deriveSeed(seed, 7777)) };
     placeCamp(map, (c) => c.distance >= CAMP_FIRST_MIN && c.distance <= CAMP_FIRST_MAX);
     return map;
@@ -160,7 +166,8 @@ const Generator = (() => {
   const CAMP_MOVE_MIN = 3;
 
   function placeCamp(map, fits) {
-    const wild = [...map.cells.values()].filter((c) => c.layout !== "base");
+    const isBoss = (c) => map.boss && c.x === map.boss.x && c.y === map.boss.y;
+    const wild = [...map.cells.values()].filter((c) => c.layout !== "base" && !isBoss(c));
     const ok = wild.filter(fits);
     const c = map.campRng.pick(ok.length ? ok : wild);
     map.camp = { x: c.x, y: c.y };

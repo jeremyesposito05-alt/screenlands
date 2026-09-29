@@ -34,9 +34,13 @@ const World = (() => {
     coords: { x: 0, y: 0 },
     distance: 0,
     zone: null,
-    // Murs et obstacles de la zone chargée : tout ce qui arrête un corps.
+    // Murs et obstacles de la zone chargée : tout ce qui arrête un corps ; et
+    // les grilles de navigation des ennemis, une par taille (voir navFor).
     solids: [],
-    nav: null,
+    navs: new Map(),
+    // Projectiles des Tireurs, et explosions des Kamikazes à l'écran.
+    bullets: [],
+    blasts: [],
     gems: [],
     enemies: [],
     // Le coffre de la zone s'il n'a pas été ouvert : {x, y, size, tier,
@@ -84,6 +88,8 @@ const World = (() => {
       relics: [],
       // Secondes pendant lesquelles le Sablier fige la menace.
       threatFrozen: 0,
+      // Le Gardien de cette carte est-il vaincu ?
+      bossDead: false,
       // Gemmes déjà ramassées, "x,y,index", pour qu'une zone quittée puis
       // retrouvée ne les rende pas deux fois.
       taken: new Set(),
@@ -140,6 +146,7 @@ const World = (() => {
     r.relics = [];
     r.threat = 0;
     r.threatFrozen = 0;
+    r.bossDead = false;
     state.fx = Powers.fresh();
     state.threatLevel = 0;
     state.hunter = null;
@@ -182,7 +189,9 @@ const World = (() => {
     state.coords = { x: cx, y: cy };
     state.distance = distance;
     state.solids = [...borderWalls(ZoneRegistry.exits(cx, cy)), ...zone.obstacles];
-    state.nav = Nav.build(state.solids, Enemies.SIZE);
+    state.navs = new Map();
+    state.bullets = [];
+    state.blasts = [];
     state.visited.add(`${cx},${cy}`);
     const campHere = ZoneRegistry.isCamp(cx, cy);
     state.fire = campHere ? zone.fire : null;
@@ -242,16 +251,87 @@ const World = (() => {
     const spots = zone.spawns
       .filter((at) => Math.hypot(at.x - p.x, at.y - p.y) >= Config.SPAWN_SAFE_DISTANCE)
       .sort((a, b) => Math.hypot(b.x - p.x, b.y - p.y) - Math.hypot(a.x - p.x, a.y - p.y));
-    // Être une élite est tiré par ennemi, avec une graine fixe : repasser la
-    // porte ne relance pas le dé.
-    const eliteChance = Math.min(Config.ELITE_CHANCE_MAX, Config.ELITE_CHANCE * level);
-    state.enemies = roster.slice(0, spots.length).map(({ type, i }, n) => {
-      const roll = deriveSeed(seed, cx, cy, 100 + i) / 4294967296;
-      return Enemies.spawn(type, spots[n], distance, {
-        elite: roll < eliteChance,
+    state.enemies = [];
+    // Le Gardien garde le bout de la carte tant qu'il n'est pas vaincu : il
+    // prend le point d'apparition le plus éloigné, les autres se partagent le
+    // reste.
+    if (ZoneRegistry.isBoss(cx, cy) && !state.run.bossDead && spots.length) {
+      const g = Enemies.spawn("guardian", spots.shift(), distance, {
+        hp: Enemies.TYPES.guardian.hp + distance,
         speed: Config.THREAT_SPEED * level,
       });
+      g.slot = "boss";
+      state.enemies.push(g);
+    }
+    // Être une élite est tiré par ennemi, avec une graine fixe : repasser la
+    // porte ne relance pas le dé. Un essaim occupe une seule place de la liste
+    // mais compte plusieurs individus.
+    const eliteChance = Math.min(Config.ELITE_CHANCE_MAX, Config.ELITE_CHANCE * level);
+    roster.slice(0, spots.length).forEach(({ type, i }, n) => {
+      const roll = deriveSeed(seed, cx, cy, 100 + i) / 4294967296;
+      state.enemies.push(...Enemies.spawnGroup(type, spots[n], distance, {
+        elite: roll < eliteChance,
+        speed: Config.THREAT_SPEED * level,
+        slot: i,
+      }));
     });
+  }
+
+  // La grille de navigation de la zone pour des corps de cette taille, faite
+  // à la demande : les gros ennemis ne passent pas partout où passent les
+  // petits.
+  function navFor(size) {
+    if (!state.navs.has(size)) state.navs.set(size, Nav.build(state.solids, size));
+    return state.navs.get(size);
+  }
+
+  // Les crochets que les ennemis utilisent pour agir sur le monde.
+  const enemyCtx = {
+    player: null,
+    others: null,
+    solids: null,
+    navFor,
+    // Un tir de Tireur : un projectile qui file tout droit jusqu'au premier
+    // mur, ou jusqu'au joueur.
+    fire(e, dir, speed) {
+      state.bullets.push({ kind: "bullet", x: e.x, y: e.y, size: 4, vx: dir.x * speed, vy: dir.y * speed, damage: e.damage });
+    },
+    // L'explosion d'un Kamikaze : elle blesse le joueur dans son rayon, et
+    // aussi les autres ennemis, d'où l'intérêt de l'attirer dans un groupe.
+    explode(e, radius, enemyDamage) {
+      state.blasts.push({ x: e.x, y: e.y, r: radius, life: 0.35 });
+      const p = state.player;
+      if (Math.hypot(p.x - e.x, p.y - e.y) < radius + p.size / 2 && p.invuln <= 0) hurt(e);
+      e.hp = 0;
+      const i = state.enemies.indexOf(e);
+      if (i >= 0) state.enemies.splice(i, 1);
+      kill(e);
+      for (const o of [...state.enemies]) {
+        if (o.hp > 0 && Math.hypot(o.x - e.x, o.y - e.y) < radius + o.size / 2) {
+          const dx = o.x - e.x, dy = o.y - e.y;
+          const dir = Math.abs(dx) >= Math.abs(dy) ? { x: Math.sign(dx) || 1, y: 0 } : { x: 0, y: Math.sign(dy) || 1 };
+          damageEnemy(o, enemyDamage, dir, 18);
+        }
+      }
+    },
+  };
+
+  // Les projectiles ennemis avancent, s'écrasent sur les murs, et blessent le
+  // joueur qu'ils touchent.
+  function updateBullets(dt) {
+    const p = state.player;
+    state.bullets = state.bullets.filter((b) => {
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      if (b.x < 0 || b.y < 0 || b.x > Config.ZONE_W || b.y > Config.ZONE_H) return false;
+      if (state.solids.some((r) => Physics.overlapsRect(b, r))) return false;
+      if (Physics.overlapsBody(b, p)) {
+        if (p.invuln <= 0) hurt(b);
+        return false;
+      }
+      return true;
+    });
+    state.blasts = state.blasts.filter((x) => (x.life -= dt) > 0);
   }
 
   // Combien d'ennemis de cette zone sont encore morts : à partir du palier
@@ -428,16 +508,34 @@ const World = (() => {
     // Le Chasseur n'est pas dans la liste des ennemis : les armes ne le
     // touchent pas, et il ne compte pas parmi les morts de la zone.
     const hunters = state.hunter ? [state.hunter] : [];
+    enemyCtx.player = p;
+    enemyCtx.others = state.enemies;
+    enemyCtx.solids = state.solids;
     for (const e of [...state.enemies, ...hunters]) {
-      Enemies.step(e, p, state.enemies, dt, state.nav, state.solids);
+      // Un ennemi soufflé par une explosion pendant ce même pas ne joue plus.
+      if (e.hp <= 0) continue;
+      Enemies.step(e, enemyCtx, dt);
       if (p.invuln <= 0 && Enemies.harmful(e) && Physics.overlapsBody(p, e)) hurt(e);
       if (state.phase === "dead") return;
     }
+    updateBullets(dt);
+    if (state.phase === "dead") return;
 
     changeZoneIfNeeded();
   }
 
   function kill(e) {
+    // Le Gardien vaincu lâche un coffre légendaire, et ne reviendra pas sur
+    // cette carte.
+    if (e.slot === "boss") {
+      state.run.bossDead = true;
+      state.drops.push({ kind: "chest", tier: "legendary", item: null, x: e.x, y: e.y, size: 12 });
+      showBanner("Gardien vaincu", "il laisse un coffre légendaire", 3);
+      return;
+    }
+    // Un membre d'essaim ne compte pour un mort, et ne lâche sa gemme, que
+    // s'il est le dernier de son groupe.
+    if (e.slot !== undefined && state.enemies.some((o) => o !== e && o.slot === e.slot && o.hp > 0)) return;
     const key = zoneKey();
     if (!state.run.killed.has(key)) state.run.killed.set(key, []);
     state.run.killed.get(key).push(state.run.threat);
@@ -756,6 +854,7 @@ const World = (() => {
   // Les outils du mode test : tout essayer sans avoir à le trouver. Ils
   // passent par les mêmes règles que le jeu (take, kill, enterZone), pour que
   // ce qu'on teste soit bien ce qu'on joue.
+  let sandboxSpawns = 0;
   const sandbox = {
     // Active ou quitte le mode test : invincible par défaut, banque intacte.
     enable(on) {
@@ -794,14 +893,21 @@ const World = (() => {
       const spots = (state.zone.spawns.length ? state.zone.spawns : LAYOUTS.clearing.spawns)
         .slice().sort((a, b) => Math.hypot(b.x - p.x, b.y - p.y) - Math.hypot(a.x - p.x, a.y - p.y));
       const at = spots[state.enemies.length % spots.length];
-      const e = Enemies.spawn(type, at, Math.max(1, state.distance), {
-        elite, speed: Config.THREAT_SPEED * threatLevel(),
+      const distance = Math.max(1, state.distance);
+      const group = Enemies.spawnGroup(type, at, distance, {
+        elite,
+        speed: Config.THREAT_SPEED * threatLevel(),
+        hp: type === "guardian" ? Enemies.TYPES.guardian.hp + distance : undefined,
+        slot: type === "guardian" ? "boss" : `test${sandboxSpawns++}`,
       });
-      e.wake = 0.3;
-      state.enemies.push(e);
+      for (const e of group) e.wake = 0.3;
+      state.enemies.push(...group);
     },
     killAll() {
-      for (const e of state.enemies) kill(e);
+      for (const e of state.enemies) {
+        e.hp = 0;
+        kill(e);
+      }
       state.enemies = [];
       state.hunter = null;
       state.hunterComing = null;
