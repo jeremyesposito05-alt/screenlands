@@ -329,6 +329,10 @@ const Render = (() => {
       ctx.fillStyle = i < p.hp ? STYLE.heart : STYLE.heartEmpty;
       ctx.fillRect(4 + i * 9, 4, 7, 7);
     }
+    // L'arme en main, juste après les cœurs : en mode glisser, il n'y a pas
+    // de bouton pour la montrer.
+    if (state.run.weapon) drawIcon(state.run.weapon, 4 + p.maxHp * 9 + 6, 8);
+
     // Les artefacts trouvés, au milieu de la bande du bas.
     const arts = state.run.artifacts;
     const ax = Config.ZONE_W / 2 - ((arts.length - 1) * 12) / 2;

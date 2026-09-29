@@ -49,9 +49,9 @@
     }
     #joystick {
       position: fixed;
-      width: 96px;
-      height: 96px;
-      margin: -48px 0 0 -48px;
+      width: 88px;
+      height: 88px;
+      margin: -44px 0 0 -44px;
       border-radius: 50%;
       border: 2px solid rgba(255, 255, 255, 0.25);
       background: rgba(255, 255, 255, 0.06);
@@ -59,6 +59,33 @@
       box-sizing: border-box;
     }
     #joystick[hidden] { display: none; }
+    #joystick .arrow {
+      position: absolute;
+      width: 0;
+      height: 0;
+      border: 7px solid transparent;
+      opacity: 0.35;
+    }
+    #joystick .arrow.on { opacity: 1; }
+    #joystick .arrow.up { left: 50%; top: 4px; margin-left: -7px; border-bottom-color: #f2c44d; border-top-width: 0; }
+    #joystick .arrow.down { left: 50%; bottom: 4px; margin-left: -7px; border-top-color: #f2c44d; border-bottom-width: 0; }
+    #joystick .arrow.left { top: 50%; left: 4px; margin-top: -7px; border-right-color: #f2c44d; border-left-width: 0; }
+    #joystick .arrow.right { top: 50%; right: 4px; margin-top: -7px; border-left-color: #f2c44d; border-right-width: 0; }
+    #controls {
+      position: fixed;
+      left: 50%;
+      bottom: calc(env(safe-area-inset-bottom) + 64px);
+      transform: translateX(-50%);
+      padding: 10px 16px;
+      border-radius: 20px;
+      border: 1px solid rgba(169, 139, 240, 0.6);
+      background: rgba(20, 16, 34, 0.85);
+      color: #d9ccff;
+      font: 14px system-ui, sans-serif;
+      touch-action: none;
+      cursor: pointer;
+    }
+    #controls[hidden] { display: none; }
     #attack {
       position: fixed;
       right: calc(env(safe-area-inset-right) + 22px);
@@ -91,7 +118,15 @@
 </head>
 <body>
   <div id="stage"><canvas id="game"></canvas></div>
-  <div id="joystick" hidden><div class="knob"></div></div>
+  <!-- Le joystick : quatre flèches, dont s'allume celle que le pouce vise. -->
+  <div id="joystick" hidden>
+    <div class="arrow up"></div><div class="arrow down"></div>
+    <div class="arrow left"></div><div class="arrow right"></div>
+    <div class="knob"></div>
+  </div>
+  <!-- Le choix des commandes, au camp de base seulement : ailleurs, on ne
+       veut pas le toucher par mégarde en pleine course. -->
+  <button id="controls" type="button" hidden></button>
   <!-- Le bouton d'attaque, sous le pouce droit ; le joystick apparaît
        partout ailleurs. Caché tant qu'on n'a pas trouvé d'arme ; son icône
        est celle de l'arme en main (main.js). -->

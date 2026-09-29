@@ -195,7 +195,59 @@ const World = (() => {
     return Config.PLAYER_SPEED * (1 + bonus);
   }
 
-  function step(dt, dir, attack) {
+  // Un corps pourrait-il avancer d'un pixel dans cette direction ?
+  function canGo(b, dir) {
+    const probe = { x: b.x, y: b.y, size: b.size };
+    return !Physics.moveAxis(probe, dir.x ? "x" : "y", dir.x || dir.y, state.solids);
+  }
+
+  // L'aide aux angles des jeux à la Zelda : bloqué de front, mais à quelques
+  // pixels près d'un passage (une porte, l'espace entre deux rochers), le
+  // joueur glisse de côté pour s'y aligner au lieu de buter. Renvoie le
+  // décalage de côté qui débloque la direction, ou 0 s'il n'y en a pas.
+  const CORNER_ASSIST = 7;
+  function sideStep(b, dir) {
+    const side = dir.x ? "y" : "x";
+    for (let off = 1; off <= CORNER_ASSIST; off++) {
+      for (const sign of [-1, 1]) {
+        const probe = { x: b.x, y: b.y, size: b.size };
+        if (!Physics.moveAxis(probe, side, sign * off, state.solids) && canGo(probe, dir)) return sign * off;
+      }
+    }
+    return 0;
+  }
+
+  // Le joueur peut-il partir dans cette direction, tout de suite ou avec
+  // l'aide aux angles ?
+  function canGoSoon(b, dir) {
+    return canGo(b, dir) || sideStep(b, dir) !== 0;
+  }
+
+  // La voie est-elle libre sur au moins une tuile dans cette direction ?
+  // C'est la condition d'un virage demandé d'avance : sans elle, le joueur
+  // tournerait dans le moindre renfoncement et buterait aussitôt.
+  function isOpen(b, dir) {
+    const probe = { x: b.x, y: b.y, size: b.size };
+    const s = sideStep(probe, dir);
+    if (!canGo(probe, dir) && !s) return false;
+    if (s) Physics.moveAxis(probe, dir.x ? "y" : "x", s, state.solids);
+    return !Physics.moveAxis(probe, dir.x ? "x" : "y", (dir.x || dir.y) * Config.TILE, state.solids);
+  }
+
+  function movePlayer(dir, dist) {
+    const p = state.player;
+    if (canGo(p, dir)) {
+      Physics.moveAxis(p, dir.x ? "x" : "y", (dir.x || dir.y) * dist, state.solids);
+      return;
+    }
+    const s = sideStep(p, dir);
+    if (s) Physics.moveAxis(p, dir.x ? "y" : "x", Math.sign(s) * Math.min(dist, Math.abs(s)), state.solids);
+  }
+
+  // `intent` vient d'Input : {dir, next}. `next` est un virage demandé
+  // d'avance ; il est pris dès que le passage s'ouvre (intent.accepted
+  // passe alors à true, et main.js prévient Input).
+  function step(dt, intent, attack) {
     tickMessages(dt);
 
     if (state.phase === "dead") {
@@ -208,13 +260,23 @@ const World = (() => {
     p.invuln = Math.max(0, p.invuln - dt);
     p.attackCooldown = Math.max(0, p.attackCooldown - dt);
 
+    // Un virage demandé est pris tout de suite si le joueur est à l'arrêt ou
+    // bloqué ; en pleine course, seulement quand la voie s'ouvre vraiment.
+    let dir = intent.dir;
+    const next = intent.next;
+    if (next) {
+      const idle = (!dir.x && !dir.y) || !canGoSoon(p, dir);
+      if (idle ? canGoSoon(p, next) : isOpen(p, next)) {
+        dir = next;
+        intent.accepted = true;
+      }
+    }
+
     // Le joueur ne s'arrête jamais pour frapper. Il garde seulement la
     // direction de son coup de mêlée tant que celui-ci dure.
     if (dir.x || dir.y) {
       if (!state.swing) p.facing = dir;
-      const dist = speed() * dt;
-      if (dir.x) Physics.moveAxis(p, "x", dir.x * dist, state.solids);
-      if (dir.y) Physics.moveAxis(p, "y", dir.y * dist, state.solids);
+      movePlayer(dir, speed() * dt);
     }
     if (attack && state.run.weapon) Weapons.use(state, ITEMS[state.run.weapon]);
     Weapons.update(state, dt, { kill, collect: pickUp });
@@ -437,8 +499,8 @@ const World = (() => {
     else if (dir.y > 0) p.y = m;
   }
 
-  function showBanner(title, detail) {
-    state.banner = { title, detail, time: Config.BANNER_TIME };
+  function showBanner(title, detail, time = Config.BANNER_TIME) {
+    state.banner = { title, detail, time };
   }
 
   function tickMessages(dt) {
@@ -453,5 +515,5 @@ const World = (() => {
     state.popups = state.popups.filter((pop) => pop.time > 0);
   }
 
-  return { state, newExpedition, gemValue, step, has };
+  return { state, newExpedition, gemValue, step, has, say: showBanner };
 })();

@@ -93,17 +93,29 @@ Tous les chiffres d'équilibrage sont regroupés en bas de `src/config.js`.
 Ouvrir le lien dans Safari, puis `Partager > Sur l'écran d'accueil`. Lancé
 depuis l'icône, le jeu s'ouvre en plein écran, sans la barre de Safari.
 
-On pose le doigt n'importe où : un joystick apparaît sous le doigt, et le
-joueur part dans la direction où on le fait glisser. Dès qu'on a trouvé une
-arme, un bouton à son image apparaît en bas à droite : un pouce sur le
-joystick, l'autre sur le bouton.
+Deux modes de commande, au choix, par le bouton qui apparaît au camp de
+base (le choix est retenu) :
+
+- **Glisser** (par défaut). Le personnage court tout seul dans la dernière
+  direction donnée et s'arrête contre un mur, à la manière de *Tomb of the
+  Mask*. On glisse le doigt pour changer de direction, on touche l'écran
+  sans glisser pour frapper, on maintient le doigt immobile pour s'arrêter.
+  Un virage demandé contre un mur est gardé en mémoire 0,8 s et pris dès que
+  le passage s'ouvre, comme dans Pac-Man.
+- **Joystick**. Un joystick apparaît sous le doigt ; tiré trop loin, il suit
+  le doigt, et la flèche de la direction retenue s'allume. Dès qu'on a trouvé
+  une arme, un bouton à son image apparaît en bas à droite.
+
+Dans les deux modes, une aide aux angles aligne le personnage sur une porte
+ou un passage quand il arrive à quelques pixels près.
 
 ## Sur PC
 
 Double-cliquer sur `index.html` suffit. Flèches directionnelles, ou ZQSD sur
 clavier français et WASD sur clavier anglais : les touches sont lues par
 position physique, donc les deux marchent. Espace, J ou Entrée pour
-frapper.
+frapper. En mode glisser, une flèche donne la direction de course ; en mode
+joystick, on maintient la flèche.
 
 Pour tester dans les conditions du site publié, `tools/serve.pl` est un petit
 serveur local en Perl :
@@ -130,7 +142,7 @@ src/items.js         les armes et les artefacts, décrits par des données
 src/nav.js           plus court chemin des ennemis autour des obstacles
 src/enemies.js       les ennemis : des fiches qui choisissent une règle de visée
 src/save.js          la progression permanente (la banque)
-src/input.js         clavier, joystick et bouton d'attaque
+src/input.js         clavier et tactile : modes glisser et joystick
 src/weapons.js       les armes en action : coups de mêlée et projectiles
 src/world.js         l'expédition et ses règles : gemmes, coups, camps, transitions
 src/render.js        tout ce qui dessine, et rien d'autre
