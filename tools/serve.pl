@@ -27,9 +27,12 @@ my %type = (
 );
 
 my $server = IO::Socket::INET->new(
-  LocalAddr => "127.0.0.1", LocalPort => $port, Listen => 32, ReuseAddr => 1,
+  LocalAddr => "127.0.0.1", LocalPort => $port, Listen => 128, ReuseAddr => 1,
 ) or die "Port $port indisponible : $!\n";
 $| = 1;
+# Un navigateur qui ferme une connexion en cours de réponse ne doit pas tuer
+# le serveur.
+$SIG{PIPE} = "IGNORE";
 print "Screenlands sur http://localhost:$port\n";
 
 my $sel = IO::Select->new($server);
@@ -46,6 +49,20 @@ sub drop {
 
 sub answer {
   my ($c, $request) = @_;
+  # Le convertisseur (tools/pixelizer.html) enregistre ses sprites par PUT,
+  # dans assets/sprites et nulle part ailleurs.
+  if ($request =~ m{^PUT\s+(/assets/sprites/[\w-]+\.png)\s}) {
+    my $path = $1;
+    $request =~ /\r?\n\r?\n/;
+    my $body = substr($request, $+[0]);
+    mkdir "$root/assets/sprites";
+    open my $out, ">:raw", "$root$path" or return;
+    print $out $body;
+    close $out;
+    print $c "HTTP/1.0 204 No Content\r\nContent-Length: 0\r\n\r\n";
+    print "PUT $path (", length($body), " octets)\n";
+    return;
+  }
   my ($path) = $request =~ m{^GET\s+(\S+)};
   $path //= "/";
   $path =~ s/[?#].*//;
@@ -83,7 +100,11 @@ while (1) {
     }
     $buf{$fh} .= $chunk;
     # La requête est complète quand ses en-têtes le sont.
+    # Un PUT attend en plus son corps, de la longueur annoncée.
     if ($buf{$fh} =~ /\r?\n\r?\n/) {
+      my $head = $+[0];
+      my ($len) = $buf{$fh} =~ /^Content-Length:\s*(\d+)/mi;
+      next if $buf{$fh} =~ /^PUT/ && length($buf{$fh}) - $head < ($len // 0);
       answer($fh, $buf{$fh});
       drop($fh);
     }

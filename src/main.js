@@ -13,6 +13,7 @@
   const attackButton = document.getElementById("attack");
   Input.init(document.getElementById("joystick"), attackButton,
              [document.getElementById("overlay"), document.getElementById("pause")]);
+  Sprites.load();
   Render.init(canvas);
   World.newExpedition();
   Menu.init();

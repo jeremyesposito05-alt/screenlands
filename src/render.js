@@ -2,10 +2,9 @@
 
 // Le rendu : tout ce qui dessine, et rien d'autre.
 //
-// Il lit l'état de World sans jamais le modifier. Pour l'instant chaque
-// élément est une forme de couleur ; quand les graphismes arriveront, c'est
-// le seul fichier à réécrire : STYLE deviendra une table `kind` -> sprite, et
-// le reste du jeu ne verra pas la différence.
+// Il lit l'état de World sans jamais le modifier. Le décor et le héros sont
+// des images (voir Sprites et Scenery) ; le reste est encore fait de formes
+// de couleur, qui serviront aussi de repli tant qu'une image manque.
 //
 // L'interface occupe les bandes de mur du haut et du bas, pour ne pas cacher
 // le terrain : cœurs et butin porté en haut, banque et valeur des gemmes en
@@ -72,19 +71,40 @@ const Render = (() => {
     ctx.imageSmoothingEnabled = false;
   }
 
+  // Le dessin se fait en couches, de bas en haut :
+  // 1. le sol, mis en cache par zone : texture, détails, murs, obstacles,
+  //    pieds des arbres et des lampadaires (voir groundLayer) ;
+  // 2. ce qui est posé au sol : feu, portail, effets, coffres, gemmes ;
+  // 3. les personnages, rangés par profondeur : celui qui est plus bas sur
+  //    l'écran passe devant ;
+  // 4. le surplomb : feuillages et lanternes, qui s'effacent quand quelqu'un
+  //    passe dessous (voir drawOverhang) ;
+  // 5. la lumière : la pénombre, et les halos des lanternes, du feu et du
+  //    héros (voir drawLighting) ;
+  // 6. l'interface.
+  // Sans les images (pas encore chargées, ou absentes), les couches 1, 4 et
+  // 5 retombent sur les anciennes formes de couleur.
   function draw(state, dt) {
     clock += dt;
     const { zone, solids, player } = state;
+    const art = !!Sprites.get("ground_grass");
+    const dress = art ? Scenery.dress(state) : null;
 
-    ctx.fillStyle = zone.ground;
-    ctx.fillRect(0, 0, Config.ZONE_W, Config.ZONE_H);
+    if (art) {
+      ctx.drawImage(groundLayer(state, dress), 0, 0);
+    } else {
+      ctx.fillStyle = zone.ground;
+      ctx.fillRect(0, 0, Config.ZONE_W, Config.ZONE_H);
+    }
 
     if (state.fire) drawFire(state.fire);
     if (state.portal) drawPortal(state.portal);
     drawGroundFx(state.fx);
-    for (const s of solids) {
-      ctx.fillStyle = STYLE[s.kind];
-      ctx.fillRect(s.x, s.y, s.w, s.h);
+    if (!art) {
+      for (const s of solids) {
+        ctx.fillStyle = STYLE[s.kind];
+        ctx.fillRect(s.x, s.y, s.w, s.h);
+      }
     }
     if (state.chest) drawChest(state.chest);
     for (const d of state.drops) {
@@ -92,17 +112,27 @@ const Render = (() => {
       else drawItemOnGround(d);
     }
     for (const g of state.gems) drawGem(g.x, g.y, g.size);
-    for (const e of state.enemies) drawEnemy(e);
+    drawDowned(state);
     if (state.hunterComing) drawHunterWarning(state.hunterComing);
-    if (state.hunter) drawHunter(state.hunter);
-    drawAllies(state);
-    if (state.phase !== "dead") {
-      drawPlayer(player);
-      drawPlayerFx(state);
-    }
+
+    // Les personnages, rangés par la hauteur de leurs pieds.
+    const actors = state.enemies.map((e) => ({ y: e.y + e.size / 2, draw: () => drawEnemy(e) }));
+    if (state.hunter) actors.push({ y: state.hunter.y + 7, draw: () => drawHunter(state.hunter) });
+    for (const a of state.run.allies) actors.push({ y: a.y + 4, draw: () => drawAlly(a.type, a.x, a.y) });
+    if (state.phase !== "dead") actors.push({ y: player.y + player.size / 2, draw: () => drawPlayer(player, dt) });
+    actors.sort((a, b) => a.y - b.y);
+    for (const a of actors) a.draw();
+
+    if (state.phase !== "dead") drawPlayerFx(state);
+    drawAllyAttacks(state);
     if (state.swing) drawSwing(state.swing, player);
     for (const s of state.projectiles) drawProjectile(s);
     drawEnemyShots(state);
+
+    if (art) {
+      drawOverhang(state, dress, dt);
+      drawLighting(state, dress);
+    }
 
     for (const pop of state.popups) {
       text(pop.text, pop.x, pop.y - 8, pop.tier ? TIERS[pop.tier] : STYLE.gem, "center");
@@ -112,6 +142,264 @@ const Render = (() => {
     drawThreat(state);
     drawMinimap(state);
     if (state.banner) drawBanner(state.banner, state.phase === "dead");
+  }
+
+  // Une image, éventuellement retournée de gauche à droite.
+  function drawSprite(img, x, y, flip = false, c = ctx) {
+    if (!flip) { c.drawImage(img, x, y); return; }
+    c.save();
+    c.translate(x + img.width, y);
+    c.scale(-1, 1);
+    c.drawImage(img, 0, 0);
+    c.restore();
+  }
+
+  // --- Couche 1 : le sol ---
+  // Tout ce qui ne bouge pas, peint une fois par zone dans un canvas à la
+  // taille de la zone, puis recopié à chaque image.
+  const HEDGE_DARK = "#20381f";
+  let groundCanvas = null, groundKey = "";
+
+  function groundLayer(state, dress) {
+    const key = `${ZoneRegistry.seed}|${state.coords.x},${state.coords.y}|${Sprites.version}`;
+    if (groundCanvas && key === groundKey) return groundCanvas;
+    groundKey = key;
+    const W = Config.ZONE_W, H = Config.ZONE_H, t = Config.WALL;
+    if (!groundCanvas) groundCanvas = document.createElement("canvas");
+    groundCanvas.width = W; groundCanvas.height = H;
+    const g = groundCanvas.getContext("2d");
+    g.imageSmoothingEnabled = false;
+    const S = Sprites.get;
+
+    // La texture n'est pas répétée telle quelle, ce qui dessinerait un motif
+    // régulier : le sol est un patchwork de petits carrés pris au hasard dans
+    // l'image, retournés au hasard. L'image n'a donc pas besoin de se
+    // raccorder sur ses bords.
+    const tile = S(dress.ground);
+    const rng = makeRandom(deriveSeed(ZoneRegistry.seed, state.coords.x, state.coords.y, 57));
+    const P = 12;
+    for (let y = 0; y < H; y += P) {
+      for (let x = 0; x < W; x += P) {
+        const sx = rng.int(tile.width - P + 1), sy = rng.int(tile.height - P + 1);
+        const fx = rng.chance(0.5), fy = rng.chance(0.5);
+        g.save();
+        g.translate(x + (fx ? P : 0), y + (fy ? P : 0));
+        g.scale(fx ? -1 : 1, fy ? -1 : 1);
+        g.drawImage(tile, sx, sy, P, P, 0, 0, P, P);
+        g.restore();
+      }
+    }
+    // Un voile de la couleur moyenne du sol : il le calme, pour que les
+    // personnages ressortent dessus.
+    g.fillStyle = averageColor(tile, 0.4);
+    g.fillRect(0, 0, W, H);
+    for (const d of dress.decals) {
+      const img = S(d.name);
+      if (img) drawSprite(img, d.x, d.y, d.flip, g);
+    }
+
+    // Les obstacles : un rocher par bloc carré, de la haie pour les murs
+    // intérieurs allongés.
+    for (const s of state.solids) {
+      if (s.kind === "wall") continue;
+      if (s.w === s.h) {
+        const big = s.w > Config.TILE;
+        const img = S(`${big ? "rock" : "rock_small"}_${(s.x * 7 + s.y * 3) % 2 ? "a" : "b"}`);
+        g.fillStyle = "rgba(30, 20, 50, 0.3)";
+        g.beginPath();
+        g.ellipse(s.x + s.w / 2, s.y + s.h - 1, s.w / 2, s.h / 6, 0, 0, Math.PI * 2);
+        g.fill();
+        if (img) g.drawImage(img, Math.round(s.x + (s.w - img.width) / 2), s.y + s.h - img.height);
+      } else {
+        hedgeRun(g, s, true);
+      }
+    }
+
+    // Les murs de bordure : une haie.
+    for (const s of state.solids) if (s.kind === "wall") hedgeRun(g, s, false);
+
+    // Les encadrements de porte.
+    const exits = ZoneRegistry.exits(state.coords.x, state.coords.y);
+    const half = Config.DOOR / 2;
+    for (const side of ["left", "right"]) {
+      if (!exits[side]) continue;
+      const cy = doorCenter(side, exits[side]).y;
+      const x = side === "left" ? 0 : W - t;
+      const a = S("door_pillar_a"), b = S("door_pillar_b");
+      if (a) g.drawImage(a, x + (t - a.width) / 2, cy - half - a.height + 4);
+      if (b) g.drawImage(b, x + (t - b.width) / 2, cy + half - 4);
+    }
+    for (const side of ["up", "down"]) {
+      if (!exits[side]) continue;
+      const cx = doorCenter(side, exits[side]).x;
+      const l = S("door_left"), r = S("door_right");
+      const y = side === "up" ? t - (l ? l.height : 0) : H - (l ? l.height : 0);
+      // Les piliers de ces images sont aux 85 % (gauche) et 17 % (droite) de
+      // leur largeur : on les cale sur les bords du passage.
+      if (l) g.drawImage(l, Math.round(cx - half - l.width * 0.85), y);
+      if (r) g.drawImage(r, Math.round(cx + half - r.width * 0.17), y);
+    }
+
+    // Les pieds des arbres et des lampadaires, plantés dans les murs.
+    for (const prop of dress.props) {
+      const parts = propParts(prop);
+      if (parts.base) drawSprite(parts.base.img, parts.base.x, parts.base.y, parts.base.flip, g);
+    }
+    return groundCanvas;
+  }
+
+  // La couleur moyenne d'une image, avec cette opacité.
+  const averages = new Map();
+  function averageColor(img, alpha) {
+    if (!averages.has(img)) {
+      const c = document.createElement("canvas");
+      c.width = c.height = 1;
+      const x = c.getContext("2d");
+      x.imageSmoothingEnabled = true;
+      x.drawImage(img, 0, 0, 1, 1);
+      averages.set(img, x.getImageData(0, 0, 1, 1).data.slice(0, 3).join(", "));
+    }
+    return `rgba(${averages.get(img)}, ${alpha})`;
+  }
+
+  // Une haie le long d'un mur, en morceaux qui se chevauchent pour cacher
+  // leurs bouts arrondis. Elle déborde un peu vers la salle, jamais dans
+  // l'ouverture d'une porte.
+  function hedgeRun(g, s, inner) {
+    const horizontal = s.w > s.h;
+    const img = Sprites.get(horizontal ? "hedge_h" : "hedge_v");
+    g.fillStyle = HEDGE_DARK;
+    g.fillRect(s.x, s.y, s.w, s.h);
+    if (!img) return;
+    g.save();
+    g.beginPath();
+    if (horizontal) g.rect(s.x, s.y - 6, s.w, s.h + 8);
+    else g.rect(s.x - 3, s.y, s.w + 6, s.h);
+    g.clip();
+    if (horizontal) {
+      const rows = inner ? [s.y - 2, s.y + s.h - img.height] : [s.y + s.h - img.height + (s.y === 0 ? 1 : 0)];
+      for (const y of rows) {
+        for (let x = s.x - 6; x < s.x + s.w; x += img.width - 6) g.drawImage(img, x, y);
+      }
+    } else {
+      for (let y = s.y - 6; y < s.y + s.h; y += img.height - 6) g.drawImage(img, s.x + (s.w - img.width) / 2, y);
+    }
+    g.restore();
+  }
+
+  // Les deux morceaux d'un arbre ou d'un lampadaire : le pied, peint avec le
+  // sol, et le haut, en surplomb. `light` : où brille la lanterne.
+  function propParts(prop) {
+    const W = Config.ZONE_W, t = Config.WALL;
+    const wallX = prop.side === "left" ? t / 2 : W - t / 2;
+    const inward = prop.side === "left" ? 1 : -1;
+    const S = Sprites.get;
+    if (prop.type === "tree") {
+      const trunk = S("tree_trunk"), top = S("tree_top");
+      if (!trunk || !top) return {};
+      return {
+        base: { img: trunk, x: Math.round(wallX - trunk.width / 2), y: prop.y - trunk.height, flip: inward < 0 },
+        top: { img: top, x: Math.round(wallX + inward * 14 - top.width / 2), y: prop.y - trunk.height + 8 - top.height,
+               flip: inward < 0 },
+      };
+    }
+    const pole = S("lamp_pole"), head = S("lamp_head");
+    if (!pole || !head) return {};
+    const hx = inward > 0 ? Math.round(wallX - 3) : Math.round(wallX + 3 - head.width);
+    const hy = prop.y - pole.height - head.height + 8;
+    return {
+      base: { img: pole, x: Math.round(wallX - pole.width / 2), y: prop.y - pole.height, flip: false },
+      top: { img: head, x: hx, y: hy, flip: inward < 0 },
+      light: { x: hx + head.width * (inward > 0 ? 0.8 : 0.2), y: hy + head.height * 0.7 },
+    };
+  }
+
+  // --- Couche 4 : le surplomb ---
+  // Feuillages et lanternes passent au-dessus des personnages. Quand le héros
+  // ou un ennemi est dessous, ils deviennent transparents : on ne perd
+  // jamais de vue ce qui compte.
+  const fade = new Map();
+  let fadeKey = "";
+  function drawOverhang(state, dress, dt) {
+    const key = `${ZoneRegistry.seed}|${state.coords.x},${state.coords.y}`;
+    if (key !== fadeKey) { fade.clear(); fadeKey = key; }
+    const bodies = [state.player, ...state.enemies, ...(state.hunter ? [state.hunter] : [])];
+    dress.props.forEach((prop, i) => {
+      const top = propParts(prop).top;
+      if (!top) return;
+      const under = bodies.some((b) => b.x > top.x - 2 && b.x < top.x + top.img.width + 2 &&
+                                       b.y > top.y - 2 && b.y < top.y + top.img.height + 6);
+      const target = under ? 0.35 : 1;
+      const a = fade.has(i) ? fade.get(i) : target;
+      const next = a + Math.sign(target - a) * Math.min(Math.abs(target - a), dt * 4);
+      fade.set(i, next);
+      ctx.globalAlpha = next;
+      drawSprite(top.img, top.x, top.y, top.flip);
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  // --- Couche 5 : la lumière ---
+  // Une pénombre bleutée, plus épaisse sur les bords et à mesure que la
+  // menace monte, percée par les halos ; puis une lueur chaude par-dessus les
+  // lanternes et le feu. Calculée à la taille de la zone et agrandie en
+  // douceur : la lumière n'a pas besoin de pixels nets.
+  let lightCanvas = null;
+  function drawLighting(state, dress) {
+    const W = Config.ZONE_W, H = Config.ZONE_H;
+    if (!lightCanvas) { lightCanvas = document.createElement("canvas"); lightCanvas.width = W; lightCanvas.height = H; }
+    const l = lightCanvas.getContext("2d");
+    const night = state.zone.safe ? 0.12 : 0.2 + 0.05 * (state.threatLevel || 0);
+    l.globalCompositeOperation = "source-over";
+    l.clearRect(0, 0, W, H);
+    l.fillStyle = `rgba(16, 12, 38, ${night})`;
+    l.fillRect(0, 0, W, H);
+    const v = l.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * 0.7);
+    v.addColorStop(0, "rgba(16, 12, 38, 0)");
+    v.addColorStop(1, "rgba(16, 12, 38, 0.4)");
+    l.fillStyle = v;
+    l.fillRect(0, 0, W, H);
+
+    const flicker = 1 + 0.06 * Math.sin(clock * 9) + 0.04 * Math.sin(clock * 23);
+    const lights = [{ x: state.player.x, y: state.player.y, r: 44, warm: false }];
+    for (const prop of dress.props) {
+      const light = propParts(prop).light;
+      if (light) lights.push({ ...light, r: 52 * flicker, warm: true });
+    }
+    if (state.fire) lights.push({ x: state.fire.x, y: state.fire.y, r: 72 * flicker, warm: true });
+    if (state.portal) lights.push({ x: state.portal.x, y: state.portal.y, r: 46, warm: false });
+
+    l.globalCompositeOperation = "destination-out";
+    for (const s of lights) {
+      const gr = l.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r);
+      gr.addColorStop(0, "rgba(0, 0, 0, 0.9)");
+      gr.addColorStop(1, "rgba(0, 0, 0, 0)");
+      l.fillStyle = gr;
+      l.fillRect(s.x - s.r, s.y - s.r, s.r * 2, s.r * 2);
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(lightCanvas, 0, 0, W, H);
+    ctx.imageSmoothingEnabled = false;
+
+    ctx.globalCompositeOperation = "lighter";
+    for (const s of lights) {
+      if (!s.warm) continue;
+      const gr = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 0.6);
+      gr.addColorStop(0, "rgba(255, 170, 80, 0.22)");
+      gr.addColorStop(1, "rgba(255, 170, 80, 0)");
+      ctx.fillStyle = gr;
+      ctx.fillRect(s.x - s.r, s.y - s.r, s.r * 2, s.r * 2);
+    }
+    ctx.globalCompositeOperation = "source-over";
+
+    // Les bandes de l'interface, assombries pour que le texte s'y lise.
+    for (const [y0, y1] of [[0, 18], [H, H - 18]]) {
+      const gr = ctx.createLinearGradient(0, y0, 0, y1);
+      gr.addColorStop(0, "rgba(12, 10, 24, 0.65)");
+      gr.addColorStop(1, "rgba(12, 10, 24, 0)");
+      ctx.fillStyle = gr;
+      ctx.fillRect(0, Math.min(y0, y1), W, 18);
+    }
   }
 
   function drawFire(f) {
@@ -249,7 +537,8 @@ const Render = (() => {
     ctx.globalAlpha = 1;
   }
 
-  function drawAllies(state) {
+  // Les compagnons à terre, au sol sous les autres personnages.
+  function drawDowned(state) {
     for (const d of state.downed || []) {
       if (Math.floor(clock * 8) % 2 === 0) drawAlly(d.type, d.x, d.y, 0.6);
       ctx.strokeStyle = "rgba(242, 196, 77, 0.8)";
@@ -258,9 +547,9 @@ const Render = (() => {
       ctx.arc(d.x, d.y, 8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (d.time / Allies.DOWN_TIME));
       ctx.stroke();
     }
-    // Du dernier au premier, pour que le premier passe devant.
-    const list = state.run.allies;
-    for (let i = list.length - 1; i >= 0; i--) drawAlly(list[i].type, list[i].x, list[i].y);
+  }
+
+  function drawAllyAttacks(state) {
     for (const s of state.allyShots || []) {
       const d = Math.hypot(s.vx, s.vy) || 1;
       ctx.strokeStyle = ALLY_COLORS.archer;
@@ -771,9 +1060,30 @@ const Render = (() => {
     ctx.fillRect(s.x, s.y, s.w, s.h);
   }
 
-  function drawPlayer(p) {
+  // Le héros en image : de face, de dos ou de profil (retourné vers la
+  // gauche), les pieds au bas de son carré de collision, la tête qui dépasse
+  // au-dessus. En marche, il sautille d'un pixel, en attendant de vraies
+  // animations.
+  let lastStep = { x: 0, y: 0, moving: false };
+  function drawPlayer(p, dt = 0) {
+    if (dt > 0) {
+      lastStep.moving = Math.hypot(p.x - lastStep.x, p.y - lastStep.y) > 0.05;
+      lastStep.x = p.x; lastStep.y = p.y;
+    }
     // Clignote tant qu'il est intouchable après un coup.
     if (p.invuln > 0 && Math.floor(clock * 12) % 2 === 0) return;
+    const f = p.facing;
+    const img = Sprites.get(f.y < 0 && !f.x ? "hero_back" : f.x ? "hero_side" : "hero_front");
+    if (img) {
+      const feet = p.y + p.size / 2;
+      ctx.fillStyle = "rgba(30, 20, 50, 0.35)";
+      ctx.beginPath();
+      ctx.ellipse(p.x, feet, 6, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const bob = lastStep.moving && Math.floor(clock * 10) % 2 ? 1 : 0;
+      drawSprite(img, Math.round(p.x - img.width / 2), Math.round(feet - img.height + 1 - bob), f.x < 0);
+      return;
+    }
     const h = p.size / 2;
     const x = Math.round(p.x - h), y = Math.round(p.y - h);
     ctx.fillStyle = STYLE.player;

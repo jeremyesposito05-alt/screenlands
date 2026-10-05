@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Convertisseur pixel</title>
+<style>
+  :root { --bg: #1d1a26; --panel: #2b2738; --text: #efe8dc; --muted: #a69fb4; --accent: #f2b83c; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+         font: 14px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0 0 8px; }
+  p { margin: 0 0 12px; color: var(--muted); }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; background: var(--panel);
+              padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  input[type=text], select { background: var(--bg); color: var(--text); border: 1px solid #4a4459;
+                     border-radius: 4px; padding: 6px; font: inherit; }
+  input[type=text] { width: 160px; }
+  textarea { background: var(--bg); color: var(--text); border: 1px solid #4a4459; border-radius: 4px;
+             padding: 6px; font: 12px monospace; width: 100%; height: 48px; }
+  .wide { flex-basis: 100%; }
+  button { background: var(--accent); color: #1d1a26; border: 0; border-radius: 4px; padding: 7px 12px;
+           font: inherit; font-weight: 600; cursor: pointer; }
+  .figure { background: var(--panel); border-radius: 8px; padding: 12px; margin-bottom: 16px; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px; align-items: end; }
+  .cell { display: flex; flex-direction: column; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+  .checker { background: repeating-conic-gradient(#3a3548 0% 25%, #2f2b3c 0% 50%) 0 0 / 16px 16px; }
+  a { color: var(--accent); }
+  #status { color: var(--muted); }
+</style>
+</head>
+<body>
+<h1>Convertisseur pixel</h1>
+<p>Dépose une planche (fond blanc ou transparent). Chaque élément est détecté et numéroté, réduit à la taille
+   voulue, et chaque pixel est forcé dans une palette : celle du héros, ou une palette tirée de l'image.
+   C'est un brouillon à retoucher, pas un sprite fini. <a href="?build">Fabriquer tous les sprites du jeu</a>
+   (recettes dans <code>tools/recipes.js</code>).</p>
+
+<div class="controls">
+  <label>Image <input type="file" id="file" accept="image/*"></label>
+  <label>Tailles max. (L×H, séparées par des virgules) <input type="text" id="sizes" value="16x24,20x28"></label>
+  <label>Palette <select id="palmode"><option value="fixed">celle ci-dessous</option><option value="auto">tirée de l'image</option></select></label>
+  <label>Couleurs (palette tirée) <input type="text" id="colors" value="16"></label>
+  <label>Contour forcé <select id="outline"><option value="0">non</option><option value="1">oui</option></select></label>
+  <label class="wide">Palette fixe (codes hexadécimaux)
+    <textarea id="palette">#2E1A47 #3B4A7A #2B7A8E #4AA7A8 #6B8F3E #4A5E2B #B8333F #E65C52 #F28B3C #F2C14E
+#F8E1B9 #D7B98C #A57B52 #7B4E33 #452B6C #5B7CC0 #1F8F8D #6FD1D0 #1E5AA6 #B8851F</textarea>
+  </label>
+  <button id="run">Convertir</button>
+  <span id="status"></span>
+</div>
+<div id="out"></div>
+
+<script src="recipes.js"></script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+let source = null;
+
+// --- Couleurs ---
+const hexToRgb = (h) => { const n = parseInt(h.replace("#", ""), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const parsePalette = (text) => (text.match(/#?[0-9a-fA-F]{6}\b/g) || []).map(hexToRgb);
+
+// Distance perçue approchée (pondération « redmean »).
+function nearest(pal, r, g, b) {
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < pal.length; i++) {
+    const p = pal[i], rm = (p[0] + r) / 2;
+    const dr = p[0] - r, dg = p[1] - g, db = p[2] - b;
+    const d = (2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db;
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
+
+// Palette tirée de l'image par coupe médiane : on coupe la boîte de couleurs
+// la plus étendue en deux, jusqu'à en avoir assez.
+function medianCut(pixels, count) {
+  let boxes = [pixels];
+  while (boxes.length < count) {
+    let bi = -1, bestRange = 0, axis = 0;
+    boxes.forEach((box, i) => {
+      if (box.length < 2) return;
+      for (let a = 0; a < 3; a++) {
+        let lo = 255, hi = 0;
+        for (const p of box) { if (p[a] < lo) lo = p[a]; if (p[a] > hi) hi = p[a]; }
+        if (hi - lo > bestRange) { bestRange = hi - lo; bi = i; axis = a; }
+      }
+    });
+    if (bi < 0) break;
+    const box = boxes[bi].sort((p, q) => p[axis] - q[axis]);
+    const mid = box.length >> 1;
+    boxes.splice(bi, 1, box.slice(0, mid), box.slice(mid));
+  }
+  return boxes.filter((b) => b.length).map((b) => {
+    const s = [0, 0, 0]; for (const p of b) { s[0] += p[0]; s[1] += p[1]; s[2] += p[2]; }
+    return s.map((v) => Math.round(v / b.length));
+  });
+}
+
+// --- Détection des éléments d'une planche ---
+const isBackground = (d, i) => d[i + 3] < 128 ||
+  (Math.min(d[i], d[i + 1], d[i + 2]) > 225 && Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2]) < 25);
+
+// Composantes connexes sur une grille grossière : deux taches séparées par
+// moins de deux cases sont un même élément. Rangées de haut en bas, puis de
+// gauche à droite.
+function detect(img, link = 2) {
+  const { width: W, height: H, data: d } = img;
+  const bg = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) bg[i] = isBackground(d, i * 4) ? 1 : 0;
+  const g = Math.max(4, Math.round(Math.max(W, H) / 120));
+  const gw = Math.ceil(W / g), gh = Math.ceil(H / g);
+  const occ = new Uint8Array(gw * gh);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!bg[y * W + x]) occ[((y / g) | 0) * gw + ((x / g) | 0)] = 1;
+  const label = new Int32Array(gw * gh).fill(-1);
+  const comps = [];
+  for (let s = 0; s < gw * gh; s++) {
+    if (!occ[s] || label[s] >= 0) continue;
+    const c = { x0: Infinity, y0: Infinity, x1: 0, y1: 0, cells: 0 };
+    const stack = [s]; label[s] = comps.length;
+    while (stack.length) {
+      const k = stack.pop(), cx = k % gw, cy = (k / gw) | 0;
+      c.cells++;
+      c.x0 = Math.min(c.x0, cx); c.y0 = Math.min(c.y0, cy); c.x1 = Math.max(c.x1, cx + 1); c.y1 = Math.max(c.y1, cy + 1);
+      for (let dy = -link; dy <= link; dy++) for (let dx = -link; dx <= link; dx++) {
+        const nx = cx + dx, ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
+        const n = ny * gw + nx;
+        if (occ[n] && label[n] < 0) { label[n] = comps.length; stack.push(n); }
+      }
+    }
+    comps.push(c);
+  }
+  const big = Math.max(0, ...comps.map((c) => c.cells));
+  let figs = comps.filter((c) => c.cells > big * 0.05).map((c) => {
+    // Bornes exactes, au pixel près.
+    const f = { x0: W, y0: H, x1: 0, y1: 0 };
+    for (let y = c.y0 * g; y < Math.min(H, c.y1 * g); y++) for (let x = c.x0 * g; x < Math.min(W, c.x1 * g); x++) {
+      if (bg[y * W + x]) continue;
+      if (x < f.x0) f.x0 = x; if (x >= f.x1) f.x1 = x + 1; if (y < f.y0) f.y0 = y; if (y >= f.y1) f.y1 = y + 1;
+    }
+    return f;
+  });
+  // Rangées : des éléments dont les hauteurs se chevauchent.
+  figs.sort((a, b) => a.y0 - b.y0);
+  const rows = [];
+  for (const f of figs) {
+    const r = rows.find((r) => f.y0 < r.y1 - (r.y1 - r.y0) * 0.3);
+    if (r) { r.items.push(f); r.y1 = Math.max(r.y1, f.y1); } else rows.push({ y0: f.y0, y1: f.y1, items: [f] });
+  }
+  figs = rows.flatMap((r) => r.items.sort((a, b) => a.x0 - b.x0));
+  return { figures: figs, bg };
+}
+
+// --- Réduction ---
+// Chaque pixel cible prend la couleur de palette la plus fréquente de son
+// bloc source. `fill` étire au lieu de garder les proportions (textures).
+function pixelize(img, bg, fig, W, H, pal, opts = {}) {
+  const fw = fig.x1 - fig.x0, fh = fig.y1 - fig.y0;
+  let tw = W, th = H;
+  if (!opts.fill) {
+    const s = Math.min(W / fw, H / fh);
+    tw = Math.max(1, Math.round(fw * s)); th = Math.max(1, Math.round(fh * s));
+  }
+  const grid = new Int16Array(tw * th).fill(-1);
+  const cache = new Map();
+  for (let ty = 0; ty < th; ty++) {
+    for (let tx = 0; tx < tw; tx++) {
+      const sx0 = Math.floor(fig.x0 + tx * fw / tw), sx1 = Math.max(sx0 + 1, Math.floor(fig.x0 + (tx + 1) * fw / tw));
+      const sy0 = Math.floor(fig.y0 + ty * fh / th), sy1 = Math.max(sy0 + 1, Math.floor(fig.y0 + (ty + 1) * fh / th));
+      const votes = new Float32Array(pal.length); let empty = 0, total = 0;
+      for (let y = sy0; y < sy1; y++) for (let x = sx0; x < sx1; x++) {
+        const p = y * img.width + x; total++;
+        if (bg[p] && !opts.fill) { empty++; continue; }
+        const i = p * 4, k = (img.data[i] << 16) | (img.data[i + 1] << 8) | img.data[i + 2];
+        let c = cache.get(k);
+        if (c === undefined) { c = nearest(pal, img.data[i], img.data[i + 1], img.data[i + 2]); cache.set(k, c); }
+        votes[c]++;
+      }
+      if (empty / total > 0.55) continue;
+      let best = 0; for (let c = 1; c < pal.length; c++) if (votes[c] > votes[best]) best = c;
+      grid[ty * tw + tx] = best;
+    }
+  }
+  if (opts.outline) {
+    const lum = pal.map((c) => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]);
+    const darkest = lum.indexOf(Math.min(...lum));
+    const solid = (x, y) => x >= 0 && y >= 0 && x < tw && y < th && grid[y * tw + x] >= 0;
+    const edge = [];
+    for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++)
+      if (solid(x, y) && (!solid(x - 1, y) || !solid(x + 1, y) || !solid(x, y - 1) || !solid(x, y + 1))) edge.push(y * tw + x);
+    for (const p of edge) grid[p] = darkest;
+  }
+  const c = document.createElement("canvas");
+  c.width = tw; c.height = th;
+  const ctx = c.getContext("2d"), im = ctx.createImageData(tw, th);
+  for (let p = 0; p < tw * th; p++) if (grid[p] >= 0) im.data.set([...pal[grid[p]], 255], p * 4);
+  ctx.putImageData(im, 0, 0);
+  return c;
+}
+
+function figurePixels(img, bg, fig) {
+  const out = [];
+  const step = Math.max(1, Math.round(Math.sqrt((fig.x1 - fig.x0) * (fig.y1 - fig.y0) / 40000)));
+  for (let y = fig.y0; y < fig.y1; y += step) for (let x = fig.x0; x < fig.x1; x += step) {
+    const p = y * img.width + x;
+    if (!bg[p]) out.push([img.data[p * 4], img.data[p * 4 + 1], img.data[p * 4 + 2]]);
+  }
+  return out;
+}
+
+function enlarge(small, height) {
+  const k = Math.max(1, Math.floor(height / small.height));
+  const big = document.createElement("canvas");
+  big.width = small.width * k; big.height = small.height * k;
+  const ctx = big.getContext("2d"); ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(small, 0, 0, big.width, big.height);
+  big.className = "checker";
+  return big;
+}
+
+function loadImage(url) {
+  return new Promise((ok, ko) => { const im = new Image(); im.onload = () => ok(im); im.onerror = ko; im.src = url; });
+}
+function pixelsOf(im) {
+  const c = document.createElement("canvas"); c.width = im.naturalWidth; c.height = im.naturalHeight;
+  const ctx = c.getContext("2d"); ctx.drawImage(im, 0, 0);
+  return { canvas: c, img: ctx.getImageData(0, 0, c.width, c.height) };
+}
+
+// --- Mode manuel : une planche, tous ses éléments ---
+function run() {
+  if (!source) { $("status").textContent = "Choisis d'abord une image."; return; }
+  const sizes = $("sizes").value.split(",").map((s) => s.trim().split(/[x×]/).map(Number)).filter((s) => s[0] > 0 && s[1] > 0);
+  const { canvas, img } = pixelsOf(source);
+  const { figures, bg } = detect(img);
+  const out = $("out"); out.innerHTML = "";
+  $("status").textContent = `${figures.length} élément(s) détecté(s).`;
+  figures.forEach((fig, n) => {
+    const pal = $("palmode").value === "auto"
+      ? medianCut(figurePixels(img, bg, fig), parseInt($("colors").value) || 16)
+      : parsePalette($("palette").value);
+    const box = document.createElement("div"); box.className = "figure";
+    const row = document.createElement("div"); row.className = "row"; box.append(row);
+    const orig = document.createElement("canvas");
+    const k = 160 / (fig.y1 - fig.y0);
+    orig.width = (fig.x1 - fig.x0) * k; orig.height = 160;
+    orig.getContext("2d").drawImage(canvas, fig.x0, fig.y0, fig.x1 - fig.x0, fig.y1 - fig.y0, 0, 0, orig.width, orig.height);
+    const cell0 = document.createElement("div"); cell0.className = "cell";
+    cell0.append(orig, `n° ${n} — ${fig.x1 - fig.x0}×${fig.y1 - fig.y0}`);
+    row.append(cell0);
+    for (const [W, H] of sizes) {
+      const small = pixelize(img, bg, fig, W, H, pal, { outline: $("outline").value === "1" });
+      const cell = document.createElement("div"); cell.className = "cell";
+      cell.append(enlarge(small, 160), `${small.width}×${small.height}`);
+      row.append(cell);
+    }
+    out.append(box);
+  });
+}
+
+// --- Mode fabrication : toutes les recettes, enregistrées dans assets/sprites ---
+async function build() {
+  const out = $("out"); out.innerHTML = "";
+  const sheets = new Map();
+  let done = 0;
+  for (const r of RECIPES) {
+    const key = `${r.src}|${r.link || 2}`;
+    if (!sheets.has(key)) {
+      const { img } = pixelsOf(await loadImage(`../assets/concepts/${r.src}`));
+      sheets.set(key, { img, ...detect(img, r.link) });
+    }
+    const { img, bg, figures } = sheets.get(key);
+    const fig0 = figures[r.pick];
+    if (!fig0) { out.append(`${r.out} : élément n° ${r.pick} introuvable. `); continue; }
+    // `crop` : une partie de l'élément seulement, en fractions de sa boîte.
+    const fig = { ...fig0 };
+    if (r.crop) {
+      const fw = fig0.x1 - fig0.x0, fh = fig0.y1 - fig0.y0;
+      fig.x0 = Math.round(fig0.x0 + r.crop[0] * fw); fig.y0 = Math.round(fig0.y0 + r.crop[1] * fh);
+      fig.x1 = Math.round(fig0.x0 + r.crop[2] * fw); fig.y1 = Math.round(fig0.y0 + r.crop[3] * fh);
+    }
+    const pal = r.palette === "hero" ? parsePalette($("palette").value) : medianCut(figurePixels(img, bg, fig), r.colors || 16);
+    const small = pixelize(img, bg, fig, r.w, r.h, pal, { fill: r.fill, outline: r.outline });
+    const blob = await new Promise((ok) => small.toBlob(ok, "image/png"));
+    const res = await fetch(`/assets/sprites/${r.out}.png`, { method: "PUT", body: blob });
+    const cell = document.createElement("div"); cell.className = "cell";
+    cell.append(enlarge(small, 96), `${r.out} ${small.width}×${small.height}${res.ok ? "" : " ⚠"}`);
+    out.append(cell);
+    done += res.ok ? 1 : 0;
+  }
+  out.style.cssText = "display:flex;flex-wrap:wrap;gap:16px;align-items:end";
+  $("status").textContent = `${done} / ${RECIPES.length} sprites enregistrés dans assets/sprites.`;
+}
+
+$("file").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  source = await loadImage(URL.createObjectURL(f)); run();
+});
+$("run").addEventListener("click", run);
+const params = new URLSearchParams(location.search);
+if (params.has("build")) build();
+else if (params.get("src")) loadImage(params.get("src")).then((im) => {
+  source = im;
+  if (params.get("sizes")) $("sizes").value = params.get("sizes");
+  if (params.get("auto")) $("palmode").value = "auto";
+  run();
+});
+</script>
+</body>
+</html>

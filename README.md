@@ -146,7 +146,10 @@ graphismes.
   portes, écrans entrevus derrière, camp s'il a été vu, coffres non ouverts,
   position.
 
-Les graphismes sont des formes de couleur, en attendant les vrais.
+Les graphismes sont en cours : le décor de forêt (sol, haies, portes,
+rochers, arbres, lampadaires) et le héros sont des images ; ennemis,
+compagnons, coffres et objets sont encore des formes de couleur. Voir
+« Graphismes » plus bas.
 
 Ne sont **pas** implémentés, volontairement : l'XP, les dépenses de la
 banque, la progression permanente, le glissement d'écran.
@@ -232,10 +235,16 @@ src/input.js         clavier et tactile : modes glisser et joystick
 src/weapons.js       les armes en action : coups de mêlée et projectiles
 src/allies.js        les compagnons : la file, leurs attaques, la chute et le relèvement
 src/world.js         l'expédition et ses règles : gemmes, coups, camps, transitions
-src/render.js        tout ce qui dessine, et rien d'autre
+src/sprites.js       charge les images de assets/sprites
+src/scenery.js       habille chaque zone : sol, détails, arbres et lampadaires
+src/render.js        tout ce qui dessine, et rien d'autre, en couches
 src/menu.js          menu principal, pause et outils du bac à sable
 src/main.js          la boucle de jeu
 tools/serve.pl       serveur local pour les tests
+tools/pixelizer.html convertisseur : planches dessinées → sprites du jeu
+tools/recipes.js     ce que le convertisseur tire de chaque planche
+assets/concepts/     les planches d'origine, en grand
+assets/sprites/      les sprites du jeu, fabriqués par le convertisseur
 godot/               l'ancien prototype Godot, archivé
 ```
 
@@ -289,3 +298,36 @@ Les décors sont dessinés pour 192 px et centrés : un écran plus large a
 simplement plus de sol sur les côtés. Toutes leurs coordonnées passent par
 `obstacle()`, `block()` et `p()` dans `src/zones.js`, qui ajoutent ce
 décalage ; murs et portes sont calculés depuis la largeur réelle.
+
+## Graphismes
+
+Direction : pixel art « illustré », presque cel-shading (références :
+Eastward, Hyper Light Drifter), vue de dessus en trois quarts, contours
+colorés, lumière en haut à gauche.
+
+**Des planches aux sprites.** Les illustrations sont dessinées en grand
+(`assets/concepts/`), puis réduites à la taille du jeu par
+`tools/pixelizer.html`, qui détecte chaque élément d'une planche, le réduit
+et force ses pixels dans une palette. `tools/recipes.js` dit quoi tirer de
+chaque planche et sous quel nom. Pour tout refabriquer : lancer
+`perl tools/serve.pl`, puis ouvrir
+http://localhost:8080/tools/pixelizer.html?build ; les sprites sont écrits
+dans `assets/sprites/`. Le résultat est un brouillon propre, à retoucher à la
+main pour les personnages.
+
+**Le rendu en couches** (`src/render.js`) :
+
+1. le sol, peint une fois par zone : texture en patchwork, petits détails,
+   haies, encadrements de porte, rochers, pieds des arbres et lampadaires ;
+2. ce qui est posé au sol : feu, portail, coffres, gemmes ;
+3. les personnages, rangés par profondeur ;
+4. le surplomb : feuillages et lanternes, qui deviennent transparents quand
+   le héros ou un ennemi passe dessous ;
+5. la lumière : une pénombre qui s'épaissit avec la menace, et les halos des
+   lanternes, du feu, du portail et du héros ;
+6. l'interface.
+
+Le décor reste du décor : collisions et règles ne lisent jamais les images.
+Arbres et lampadaires sont plantés dans l'épaisseur des murs ; seul leur haut
+déborde sur la salle. Une image manquante n'est pas une erreur : le rendu
+dessine alors l'ancienne forme de couleur.
