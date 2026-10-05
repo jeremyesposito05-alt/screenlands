@@ -11,8 +11,13 @@
 // link : écart de liaison entre taches (1 sépare des éléments très proches).
 // crop : [x0, y0, x1, y1] en fractions, pour ne garder qu'une partie.
 const RECIPES = [
-  // Le héros n'est plus tiré d'une planche : il est dessiné à la main dans
-  // assets/pixel/hero.js (voir tools/paint.html).
+  // Le héros : une planche de 3 vues (face, dos, profil) × 3 images de
+  // marche, sur fond vert dans un cadre sombre. Chaque vue devient une bande
+  // de 3 images de 20 × 30.
+  ...["hero_front", "hero_back", "hero_side"].flatMap((out, row) => [0, 1, 2].map((frame) => ({
+    src: "hero_walk_sheet.png", pick: row * 3 + frame, frame, w: 20, h: 30, out, colors: 22,
+    bgAt: [[140, 110]], area: [125, 100, 995, 1300],
+  }))),
 
   // Le sol de la forêt : deux textures qui se répètent.
   { src: "ground_sheet.webp", pick: 0, w: 48, h: 48, out: "ground_grass", fill: true, colors: 12 },

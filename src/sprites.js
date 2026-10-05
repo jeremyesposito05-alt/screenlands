@@ -28,7 +28,7 @@ const Sprites = (() => {
   ];
   // Les images animées sont des bandes d'images côte à côte : la largeur
   // d'une image. Les autres n'en ont qu'une.
-  const FRAME_W = { hero_front: 18, hero_side: 18, hero_back: 18 };
+  const FRAME_W = { hero_front: 20, hero_side: 20, hero_back: 20 };
   const images = {};
   // Augmente à chaque image arrivée : le rendu s'en sert pour savoir que ce
   // qu'il a mis en cache est à refaire.

@@ -322,7 +322,12 @@ http://localhost:8080/tools/pixelizer.html?build ; les sprites sont écrits
 dans `assets/sprites/`. Le résultat est un brouillon propre, à retoucher à la
 main pour les personnages.
 
-**Les personnages dessinés à la main.** Le héros est écrit pixel par pixel
+**Le héros** vient d'une planche de 3 vues × 3 images de marche
+(`assets/concepts/hero_walk_sheet.png`), réduite en bandes de 20 × 30. Les
+élites et les ennemis qui préparent un coup sont cerclés d'un contour qui
+suit leur silhouette (doré, blanc), et les coffres d'un halo rond.
+
+**Les personnages dessinés à la main.** Le premier héros était écrit pixel par pixel
 dans `assets/pixel/hero.js` : une lettre par pixel, une palette, trois vues
 (face, dos, profil) de trois images chacune pour la marche.
 `tools/paint.html` les montre en grand et animées, et `?build` les enregistre.

@@ -1,6 +1,8 @@
 "use strict";
 
-// Le héros, dessiné pixel par pixel. Une lettre = un pixel, dans la palette
+// Le héros, dessiné pixel par pixel. Première version, remplacée dans le jeu par
+// la planche hero_walk_sheet.png (voir tools/recipes.js) ; gardée comme
+// modèle de la méthode, sous d'autres noms pour ne rien écraser. Une lettre = un pixel, dans la palette
 // PIXEL_PALETTE ; un point = transparent. Chaque vue est une suite d'images
 // de même taille : [immobile, pas A, pas B]. La marche les joue dans l'ordre
 // immobile, A, immobile, B.
@@ -148,7 +150,7 @@ const LEGS_SIDE = [
 ];
 
 const PIXEL_ART = {
-  hero_front: LEGS_FRONT.map((legs) => [...HERO_FRONT_TOP, ...legs]),
-  hero_back: LEGS_FRONT.map((legs) => [...HERO_BACK_TOP, ...legs]),
-  hero_side: LEGS_SIDE.map((legs) => [...HERO_SIDE_TOP, ...legs]),
+  hero_hand_front: LEGS_FRONT.map((legs) => [...HERO_FRONT_TOP, ...legs]),
+  hero_hand_back: LEGS_FRONT.map((legs) => [...HERO_BACK_TOP, ...legs]),
+  hero_hand_side: LEGS_SIDE.map((legs) => [...HERO_SIDE_TOP, ...legs]),
 };

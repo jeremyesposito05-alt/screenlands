@@ -146,7 +146,8 @@ const Render = (() => {
 
   // Un personnage en image, centré sur `cx`, les pieds en `feet`, avec son
   // ombre ; en blanc s'il vient d'être touché, soulevé de `bob` pixels.
-  function drawCharacter(name, cx, feet, flip = false, flash = false, bob = 0) {
+  // `rim` : [couleur, opacité] d'un contour autour de lui.
+  function drawCharacter(name, cx, feet, flip = false, flash = false, bob = 0, rim = null) {
     const img = flash ? Sprites.white(name) : Sprites.get(name);
     if (!img) return;
     const alpha = ctx.globalAlpha;
@@ -156,7 +157,14 @@ const Render = (() => {
     ctx.ellipse(cx, feet, img.width * 0.35, 1.5, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = alpha;
-    drawSprite(img, Math.round(cx - img.width / 2), Math.round(feet - img.height + 1 - bob), flip);
+    const x = Math.round(cx - img.width / 2), y = Math.round(feet - img.height + 1 - bob);
+    const ring = rim && Sprites.outline(name, 0, rim[0]);
+    if (ring) {
+      ctx.globalAlpha = alpha * rim[1];
+      drawSprite(ring, x - 1, y - 1, flip);
+      ctx.globalAlpha = alpha;
+    }
+    drawSprite(img, x, y, flip);
   }
 
   // Une image, éventuellement retournée de gauche à droite.
@@ -526,19 +534,28 @@ const Render = (() => {
     if (sprite) {
       const moving = e.wake <= 0 && e.stun <= 0;
       const bob = moving && Math.floor(clock * 8 + e.x * 0.13) % 2 ? 1 : 0;
-      drawCharacter(`enemy_${e.kind}`, e.x, e.y + h, e.look && e.look.x < 0, flash, bob);
+      // Le contour remplace les anciens cadres : blanc qui clignote quand il
+      // prépare un coup, doré qui palpite pour une élite.
+      const rim = e.windup > 0 && Math.floor(clock * 16) % 2 === 0 ? ["#ffffff", 1]
+        : e.elite && !flash ? ["#f2c44d", 0.6 + 0.4 * Math.sin(clock * 6)] : null;
+      if (e.dashing > 0 && e.dashDir) {
+        ctx.globalAlpha = 0.35;
+        drawCharacter(`enemy_${e.kind}`, e.x - e.dashDir.x * 10, e.y + h - e.dashDir.y * 10, e.look && e.look.x < 0);
+        ctx.globalAlpha = e.wake > 0 ? 0.45 : 1;
+      }
+      drawCharacter(`enemy_${e.kind}`, e.x, e.y + h, e.look && e.look.x < 0, flash, bob, rim);
     } else {
       drawEnemyShape(e, x, y, h, flash);
     }
     // Il prépare quelque chose (un tir, une charge) : un cadre blanc qui
     // clignote, le temps de réagir.
-    if (e.windup > 0 && Math.floor(clock * 16) % 2 === 0) {
+    if (!sprite && e.windup > 0 && Math.floor(clock * 16) % 2 === 0) {
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 1.5;
       ctx.strokeRect(x - 2, y - 2, e.size + 4, e.size + 4);
     }
     // En pleine charge, une traînée derrière lui.
-    if (e.dashing > 0 && e.dashDir) {
+    if (!sprite && e.dashing > 0 && e.dashDir) {
       ctx.fillStyle = "rgba(255, 90, 90, 0.35)";
       ctx.fillRect(x - e.dashDir.x * 10, y - e.dashDir.y * 10, e.size, e.size);
     }
@@ -552,7 +569,7 @@ const Render = (() => {
       ctx.fillRect(e.x - w / 2, by, w * Math.max(0, e.hp / e.maxHp), 2);
     }
     // Une élite porte une couronne dorée qui scintille.
-    if (e.elite && !flash) {
+    if (!sprite && e.elite && !flash) {
       ctx.strokeStyle = `rgba(242, 196, 77, ${0.6 + 0.4 * Math.sin(clock * 6)})`;
       ctx.lineWidth = 1.5;
       ctx.strokeRect(x - 1.5, y - 1.5, e.size + 3, e.size + 3);
@@ -714,11 +731,20 @@ const Render = (() => {
     const color = TIERS[c.tier] || TIERS.common;
     const strong = c.tier === "epic" || c.tier === "legendary";
     const glow = (strong ? 0.35 : 0.2) + 0.18 * Math.sin(clock * (strong ? 6 : 4));
-    ctx.globalAlpha = glow;
-    ctx.fillStyle = color;
-    ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
-    ctx.globalAlpha = 1;
     const img = Sprites.get(`chest_${c.tier}`) || Sprites.get("chest_common");
+    ctx.globalAlpha = glow;
+    if (img) {
+      // En image, un halo rond au sol plutôt qu'un carré.
+      const halo = ctx.createRadialGradient(c.x, c.y + 2, 0, c.x, c.y + 2, 13);
+      halo.addColorStop(0, color);
+      halo.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = halo;
+      ctx.fillRect(c.x - 13, c.y - 11, 26, 26);
+    } else {
+      ctx.fillStyle = color;
+      ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
+    }
+    ctx.globalAlpha = 1;
     if (img) {
       drawSprite(img, Math.round(c.x - img.width / 2), Math.round(c.y + h / 2 - img.height + 2));
     } else {

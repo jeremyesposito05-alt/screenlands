@@ -102,16 +102,27 @@ function medianCut(pixels, count) {
 }
 
 // --- Détection des éléments d'une planche ---
-const isBackground = (d, i) => d[i + 3] < 128 ||
-  (Math.min(d[i], d[i + 1], d[i + 2]) > 225 && Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2]) < 25);
+// Le fond : blanc ou transparent par défaut ; sinon les couleurs `bgColors`
+// relevées sur la planche (un fond vert uni, un cadre sombre).
+const isBackground = (d, i, bgColors) => d[i + 3] < 128 || (bgColors
+  ? bgColors.some((c) => Math.abs(d[i] - c[0]) + Math.abs(d[i + 1] - c[1]) + Math.abs(d[i + 2] - c[2]) < 40)
+  : Math.min(d[i], d[i + 1], d[i + 2]) > 225 && Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2]) < 25);
 
 // Composantes connexes sur une grille grossière : deux taches séparées par
 // moins de deux cases sont un même élément. Rangées de haut en bas, puis de
 // gauche à droite.
-function detect(img, link = 2) {
+// `area` : [x0, y0, x1, y1], la seule partie de la planche à lire (pour
+// ignorer un cadre autour).
+function detect(img, link = 2, bgAt = null, area = null) {
   const { width: W, height: H, data: d } = img;
+  const bgColors = bgAt && bgAt.map(([x, y]) => [...d.slice((y * W + x) * 4, (y * W + x) * 4 + 3)]);
   const bg = new Uint8Array(W * H);
-  for (let i = 0; i < W * H; i++) bg[i] = isBackground(d, i * 4) ? 1 : 0;
+  for (let i = 0; i < W * H; i++) bg[i] = isBackground(d, i * 4, bgColors) ? 1 : 0;
+  if (area) {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (x < area[0] || y < area[1] || x >= area[2] || y >= area[3]) bg[y * W + x] = 1;
+    }
+  }
   const g = Math.max(4, Math.round(Math.max(W, H) / 120));
   const gw = Math.ceil(W / g), gh = Math.ceil(H / g);
   const occ = new Uint8Array(gw * gh);
@@ -163,7 +174,7 @@ function pixelize(img, bg, fig, W, H, pal, opts = {}) {
   const fw = fig.x1 - fig.x0, fh = fig.y1 - fig.y0;
   let tw = W, th = H;
   if (!opts.fill) {
-    const s = Math.min(W / fw, H / fh);
+    const s = opts.scale || Math.min(W / fw, H / fh);
     tw = Math.max(1, Math.round(fw * s)); th = Math.max(1, Math.round(fh * s));
   }
   const grid = new Int16Array(tw * th).fill(-1);
@@ -268,11 +279,13 @@ async function build() {
   const out = $("out"); out.innerHTML = "";
   const sheets = new Map();
   let done = 0;
+  // Chaque recette retrouve son élément sur sa planche.
+  const jobs = [];
   for (const r of RECIPES) {
     const key = `${r.src}|${r.link || 2}`;
     if (!sheets.has(key)) {
       const { img } = pixelsOf(await loadImage(`../assets/concepts/${r.src}`));
-      sheets.set(key, { img, ...detect(img, r.link) });
+      sheets.set(key, { img, ...detect(img, r.link, r.bgAt, r.area) });
     }
     const { img, bg, figures } = sheets.get(key);
     const fig0 = figures[r.pick];
@@ -284,8 +297,35 @@ async function build() {
       fig.x0 = Math.round(fig0.x0 + r.crop[0] * fw); fig.y0 = Math.round(fig0.y0 + r.crop[1] * fh);
       fig.x1 = Math.round(fig0.x0 + r.crop[2] * fw); fig.y1 = Math.round(fig0.y0 + r.crop[3] * fh);
     }
-    const pal = r.palette === "hero" ? parsePalette($("palette").value) : medianCut(figurePixels(img, bg, fig), r.colors || 16);
-    const small = pixelize(img, bg, fig, r.w, r.h, pal, { fill: r.fill, outline: r.outline });
+    jobs.push({ r, img, bg, fig });
+  }
+  // Les recettes de même `out` sont les images d'une animation (`frame`) :
+  // même échelle, même palette, chacune calée en bas d'un cadre w × h, et
+  // rangées en une bande horizontale.
+  const groups = new Map();
+  for (const j of jobs) {
+    if (!groups.has(j.r.out)) groups.set(j.r.out, []);
+    groups.get(j.r.out).push(j);
+  }
+  for (const [name, list] of groups) {
+    const r = list[0].r;
+    const strip = list.length > 1 || r.frame !== undefined;
+    const pixels = list.flatMap((j) => figurePixels(j.img, j.bg, j.fig));
+    const pal = r.palette === "hero" ? parsePalette($("palette").value) : medianCut(pixels, r.colors || 16);
+    const scale = strip ? Math.min(...list.map((j) => Math.min(r.w / (j.fig.x1 - j.fig.x0), r.h / (j.fig.y1 - j.fig.y0)))) : undefined;
+    let small;
+    if (strip) {
+      list.sort((a, b) => a.r.frame - b.r.frame);
+      small = document.createElement("canvas");
+      small.width = r.w * list.length; small.height = r.h;
+      const sctx = small.getContext("2d");
+      list.forEach((j, i) => {
+        const f = pixelize(j.img, j.bg, j.fig, r.w, r.h, pal, { scale, outline: r.outline });
+        sctx.drawImage(f, i * r.w + Math.floor((r.w - f.width) / 2), r.h - f.height);
+      });
+    } else {
+      small = pixelize(list[0].img, list[0].bg, list[0].fig, r.w, r.h, pal, { fill: r.fill, outline: r.outline });
+    }
     const blob = await new Promise((ok) => small.toBlob(ok, "image/png"));
     const res = await fetch(`/assets/sprites/${r.out}.png`, { method: "PUT", body: blob });
     const cell = document.createElement("div"); cell.className = "cell";
@@ -294,7 +334,7 @@ async function build() {
     done += res.ok ? 1 : 0;
   }
   out.style.cssText = "display:flex;flex-wrap:wrap;gap:16px;align-items:end";
-  $("status").textContent = `${done} / ${RECIPES.length} sprites enregistrés dans assets/sprites.`;
+  $("status").textContent = `${done} / ${groups.size} sprites enregistrés dans assets/sprites.`;
 }
 
 $("file").addEventListener("change", async (e) => {
