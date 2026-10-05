@@ -120,6 +120,22 @@ const Generator = (() => {
       c.layout = rng.pick(fresh.length ? fresh : allowed);
     }
 
+    // 4 bis. Portes : chaque passage reçoit une position (1, 2 ou 3) que les
+    //    deux décors acceptent, tirée au hasard. Si aucune position n'est
+    //    commune, le centre, que tous les décors acceptent.
+    for (const c of cells.values()) {
+      for (const d of [DIRS[1], DIRS[3]]) {
+        if (!c.links[d.name]) continue;
+        const n = cells.get(key(c.x + d.dx, c.y + d.dy));
+        const mine = doorSlots(c.layout)[d.name];
+        const theirs = doorSlots(n.layout)[d.back];
+        const both = mine.filter((s) => theirs.includes(s));
+        const slot = both.length ? rng.pick(both) : 2;
+        c.links[d.name] = slot;
+        n.links[d.back] = slot;
+      }
+    }
+
     // 5. Coffres. Chacun est {tier, item} : `item` est fixé pour les deux
     //    armes garanties, et null pour les autres, dont le contenu sera tiré
     //    à l'ouverture (voir Loot). Si une carte n'a pas d'écran assez proche

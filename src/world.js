@@ -391,12 +391,13 @@ const World = (() => {
   }
 
   function nearestDoor() {
-    const p = state.player, W = Config.ZONE_W, H = Config.ZONE_H, m = Config.ENTRY_MARGIN;
+    const p = state.player, m = Config.ENTRY_MARGIN;
     const exits = ZoneRegistry.exits(state.coords.x, state.coords.y);
-    const doors = [
-      exits.left && { x: m, y: H / 2 }, exits.right && { x: W - m, y: H / 2 },
-      exits.up && { x: W / 2, y: m }, exits.down && { x: W / 2, y: H - m },
-    ].filter(Boolean);
+    const inward = { left: [m, 0], right: [-m, 0], up: [0, m], down: [0, -m] };
+    const doors = Object.keys(inward).filter((s) => exits[s]).map((s) => {
+      const c = doorCenter(s, exits[s]);
+      return { x: c.x + inward[s][0], y: c.y + inward[s][1] };
+    });
     return doors.sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
   }
 

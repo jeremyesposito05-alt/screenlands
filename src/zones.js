@@ -181,7 +181,8 @@ const ZoneRegistry = (() => {
     // Nombre d'écrans à traverser depuis le camp de base, par le plus court
     // chemin : c'est lui qui fixe la valeur des gemmes et le danger.
     distance(cx, cy) { return cell(cx, cy).distance; },
-    // Les côtés de la zone qui ont une porte vers une voisine.
+    // Les portes de la zone vers ses voisines : {left, right, up, down},
+    // chacune false ou sa position 1, 2, 3 (voir borderWalls).
     exits(cx, cy) { return cell(cx, cy).links; },
     // Le coffre de cet écran, {tier, item}, ou null.
     chest(cx, cy) { return cell(cx, cy).chest; },
@@ -196,32 +197,125 @@ const ZoneRegistry = (() => {
   };
 })();
 
-// Les segments de mur d'une zone : deux par côté, de part et d'autre de la
-// porte, plus un bouchon quand le côté n'a pas de porte. Ils sont à
+// --- Les portes ---
+// Chaque côté d'une zone peut avoir une porte, à l'une de trois positions :
+// 1, 2 ou 3. Sur les murs de gauche et de droite, c'est le tiers haut, le
+// centre ou le tiers bas ; sur les murs du haut et du bas, la gauche, le
+// centre ou la droite. Une porte vaut donc false (pas de porte) ou 1, 2, 3,
+// jamais 0, pour que « y a-t-il une porte ? » reste un simple test.
+//
+// Deux zones voisines partagent la même position pour leur porte commune :
+// sortir par le tiers haut du mur de droite fait entrer par le tiers haut du
+// mur de gauche, à la même hauteur. C'est Generator qui choisit, parmi les
+// positions que les deux décors acceptent (voir doorSlots).
+const DOOR_SLOTS = [1, 2, 3];
+// Écart d'une position à l'autre : de quoi décaler franchement la porte en
+// gardant un bout de mur de chaque côté.
+const DOOR_STEP_V = 96;
+const DOOR_STEP_H = 40;
+
+// Le centre de la porte de ce côté, à cette position, sur le bord de l'écran.
+function doorCenter(side, slot) {
+  const W = Config.ZONE_W, H = Config.ZONE_H;
+  if (side === "left" || side === "right") {
+    return { x: side === "left" ? 0 : W, y: H / 2 + (slot - 2) * DOOR_STEP_V };
+  }
+  return { x: W / 2 + (slot - 2) * DOOR_STEP_H, y: side === "up" ? 0 : H };
+}
+
+// Les segments de mur d'une zone, percés d'une porte là où `exits` en
+// indique une ({left, right, up, down} : false ou 1, 2, 3). Ils sont à
 // l'intérieur de l'écran, sur l'anneau de tuiles du bord, pour que le joueur
 // voie où sont les sorties.
 function borderWalls(exits) {
   const W = Config.ZONE_W, H = Config.ZONE_H;
-  const t = Config.WALL, door = Config.DOOR;
-  const sideX = (W - door) / 2;
-  const sideY = (H - door) / 2;
+  const t = Config.WALL, half = Config.DOOR / 2;
   const wall = (x, y, w, h) => ({ kind: "wall", x, y, w, h });
+  const walls = [];
 
-  // Les segments horizontaux s'arrêtent à l'épaisseur du mur pour ne pas
-  // recouvrir les coins, que les segments verticaux couvrent déjà.
-  const walls = [
-    wall(t, 0, sideX - t, t),
-    wall(sideX + door, 0, sideX - t, t),
-    wall(t, H - t, sideX - t, t),
-    wall(sideX + door, H - t, sideX - t, t),
-    wall(0, 0, t, sideY),
-    wall(0, sideY + door, t, sideY),
-    wall(W - t, 0, t, sideY),
-    wall(W - t, sideY + door, t, sideY),
-  ];
-  if (!exits.up) walls.push(wall(sideX, 0, door, t));
-  if (!exits.down) walls.push(wall(sideX, H - t, door, t));
-  if (!exits.left) walls.push(wall(0, sideY, t, door));
-  if (!exits.right) walls.push(wall(W - t, sideY, t, door));
+  // Les côtés verticaux couvrent toute la hauteur, coins compris ; les
+  // horizontaux s'arrêtent à l'épaisseur du mur pour ne pas les recouvrir.
+  for (const side of ["left", "right"]) {
+    const x = side === "left" ? 0 : W - t;
+    const slot = exits[side];
+    if (!slot) {
+      walls.push(wall(x, 0, t, H));
+      continue;
+    }
+    const cy = doorCenter(side, slot).y;
+    walls.push(wall(x, 0, t, cy - half), wall(x, cy + half, t, H - cy - half));
+  }
+  for (const side of ["up", "down"]) {
+    const y = side === "up" ? 0 : H - t;
+    const slot = exits[side];
+    if (!slot) {
+      walls.push(wall(t, y, W - 2 * t, t));
+      continue;
+    }
+    const cx = doorCenter(side, slot).x;
+    walls.push(wall(t, y, cx - half - t, t), wall(cx + half, y, W - t - cx - half, t));
+  }
   return walls;
 }
+
+// Les positions de porte praticables pour ce décor, côté par côté :
+// {left: [1, 2], right: [2, 3], ...}. Calculées une fois pour toutes plutôt
+// que déclarées à la main : un décor ajouté plus tard est pris en compte
+// tout seul.
+//
+// Une position est praticable si l'on peut entrer tout droit sur trois
+// tuiles sans heurter d'obstacle, et rejoindre de là le cœur du décor : la
+// région où se trouvent gemmes, coffre et feu.
+const doorSlots = (() => {
+  const cache = new Map();
+  const STEP = 4;
+
+  function compute(layout) {
+    const W = Config.ZONE_W, H = Config.ZONE_H;
+    const half = Config.PLAYER_SIZE / 2, t = Config.WALL;
+    const free = (x, y) =>
+      x - half >= t && x + half <= W - t && y - half >= t && y + half <= H - t &&
+      !layout.obstacles.some((s) => Physics.overlapsRect({ x, y, size: Config.PLAYER_SIZE }, s));
+    const snap = (v) => Math.round(v / STEP) * STEP;
+
+    // Le cœur du décor : ce qu'on peut atteindre depuis le feu, le premier
+    // point d'intérêt, ou à défaut le centre.
+    const anchors = [layout.fire, ...layout.gems, layout.chest].filter(Boolean);
+    const start = anchors.map((a) => ({ x: snap(a.x), y: snap(a.y) })).find((a) => free(a.x, a.y)) ||
+                  { x: snap(W / 2), y: snap(H / 2) };
+    const seen = new Set([`${start.x},${start.y}`]);
+    const queue = [start];
+    for (let i = 0; i < queue.length; i++) {
+      const { x, y } = queue[i];
+      for (const [dx, dy] of [[STEP, 0], [-STEP, 0], [0, STEP], [0, -STEP]]) {
+        const nx = x + dx, ny = y + dy, k = `${nx},${ny}`;
+        if (seen.has(k) || !free(nx, ny)) continue;
+        seen.add(k);
+        queue.push({ x: nx, y: ny });
+      }
+    }
+    const reached = (x, y) => seen.has(`${snap(x)},${snap(y)}`);
+
+    const out = {};
+    // Au camp de base, les portes restent au centre : une porte décalée ferait
+    // passer le joueur trop près du portail.
+    if (layout.safe) return { left: [2], right: [2], up: [2], down: [2] };
+    for (const side of ["left", "right", "up", "down"]) {
+      out[side] = DOOR_SLOTS.filter((slot) => {
+        const c = doorCenter(side, slot);
+        const inward = { left: [1, 0], right: [-1, 0], up: [0, 1], down: [0, -1] }[side];
+        const lane = [1, 2, 3].map((k) => ({
+          x: c.x + inward[0] * (t + half + (k - 1) * Config.TILE),
+          y: c.y + inward[1] * (t + half + (k - 1) * Config.TILE),
+        }));
+        return lane.every((pt) => free(pt.x, pt.y)) && lane.some((pt) => reached(pt.x, pt.y));
+      });
+    }
+    return out;
+  }
+
+  return (key) => {
+    if (!cache.has(key)) cache.set(key, compute(LAYOUTS[key]));
+    return cache.get(key);
+  };
+})();

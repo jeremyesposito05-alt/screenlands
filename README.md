@@ -30,6 +30,13 @@ graphismes.
   depuis le camp de base, au centre d'une grille de 7 x 7, reliés par des
   portes comme un labyrinthe avec quelques boucles. Sept décors, dont
   certains réservés au loin.
+- **Des portes à trois positions** : au tiers haut, au centre ou au tiers bas
+  des murs latéraux, à gauche, au centre ou à droite des murs du haut et du
+  bas. Deux écrans voisins partagent la position de leur porte commune : on
+  ressort toujours en face. Les positions praticables de chaque décor sont
+  calculées par le jeu (`doorSlots()` dans `src/zones.js`) : un décor ajouté
+  plus tard est pris en compte tout seul. Le camp de base garde ses portes au
+  centre, loin du portail.
 - **Un seul camp à la fois, qu'il faut trouver.** Il brûle dans un écran
   quelconque, à deux à quatre écrans du départ pour le premier, et n'apparaît
   sur la mini-carte qu'une fois vu. S'en approcher met le butin porté à
