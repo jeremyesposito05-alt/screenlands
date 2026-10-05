@@ -17,3 +17,4 @@ export.cfg
 .DS_Store
 Thumbs.db
 *.swp
+captures/
