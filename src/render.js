@@ -1062,26 +1062,39 @@ const Render = (() => {
 
   // Le héros en image : de face, de dos ou de profil (retourné vers la
   // gauche), les pieds au bas de son carré de collision, la tête qui dépasse
-  // au-dessus. En marche, il sautille d'un pixel, en attendant de vraies
-  // animations.
-  let lastStep = { x: 0, y: 0, moving: false };
+  // au-dessus. En marche, il joue ses images dans l'ordre immobile, pas A,
+  // immobile, pas B ; une image seule sautille d'un pixel à la place.
+  const WALK = [0, 1, 0, 2];
+  // « En marche » tient un instant après le dernier pas : sur un écran à
+  // 120 Hz, certaines images tombent entre deux pas de physique.
+  const lastStep = { x: 0, y: 0, moving: false, linger: 0 };
   function drawPlayer(p, dt = 0) {
     if (dt > 0) {
-      lastStep.moving = Math.hypot(p.x - lastStep.x, p.y - lastStep.y) > 0.05;
+      if (Math.hypot(p.x - lastStep.x, p.y - lastStep.y) > 0.05) lastStep.linger = 0.1;
+      else lastStep.linger = Math.max(0, lastStep.linger - dt);
+      lastStep.moving = lastStep.linger > 0;
       lastStep.x = p.x; lastStep.y = p.y;
     }
     // Clignote tant qu'il est intouchable après un coup.
     if (p.invuln > 0 && Math.floor(clock * 12) % 2 === 0) return;
     const f = p.facing;
-    const img = Sprites.get(f.y < 0 && !f.x ? "hero_back" : f.x ? "hero_side" : "hero_front");
+    const name = f.y < 0 && !f.x ? "hero_back" : f.x ? "hero_side" : "hero_front";
+    const img = Sprites.get(name);
     if (img) {
       const feet = p.y + p.size / 2;
       ctx.fillStyle = "rgba(30, 20, 50, 0.35)";
       ctx.beginPath();
       ctx.ellipse(p.x, feet, 6, 2, 0, 0, Math.PI * 2);
       ctx.fill();
-      const bob = lastStep.moving && Math.floor(clock * 10) % 2 ? 1 : 0;
-      drawSprite(img, Math.round(p.x - img.width / 2), Math.round(feet - img.height + 1 - bob), f.x < 0);
+      const fw = Sprites.frameWidth(name), count = Sprites.frames(name);
+      const step = Math.floor(clock * 8) % 4;
+      const frame = lastStep.moving && count >= 3 ? WALK[step] : 0;
+      const bob = lastStep.moving && count < 3 && step % 2 ? 1 : 0;
+      const x = Math.round(p.x - fw / 2), y = Math.round(feet - img.height + 1 - bob);
+      ctx.save();
+      if (f.x < 0) { ctx.translate(x + fw, y); ctx.scale(-1, 1); } else ctx.translate(x, y);
+      ctx.drawImage(img, frame * fw, 0, fw, img.height, 0, 0, fw, img.height);
+      ctx.restore();
       return;
     }
     const h = p.size / 2;

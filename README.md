@@ -243,7 +243,9 @@ src/main.js          la boucle de jeu
 tools/serve.pl       serveur local pour les tests
 tools/pixelizer.html convertisseur : planches dessinées → sprites du jeu
 tools/recipes.js     ce que le convertisseur tire de chaque planche
+tools/paint.html     atelier : les sprites dessinés à la main → assets/sprites
 assets/concepts/     les planches d'origine, en grand
+assets/pixel/        les sprites dessinés à la main, lettre par lettre (le héros)
 assets/sprites/      les sprites du jeu, fabriqués par le convertisseur
 godot/               l'ancien prototype Godot, archivé
 ```
@@ -314,6 +316,12 @@ chaque planche et sous quel nom. Pour tout refabriquer : lancer
 http://localhost:8080/tools/pixelizer.html?build ; les sprites sont écrits
 dans `assets/sprites/`. Le résultat est un brouillon propre, à retoucher à la
 main pour les personnages.
+
+**Les personnages dessinés à la main.** Le héros est écrit pixel par pixel
+dans `assets/pixel/hero.js` : une lettre par pixel, une palette, trois vues
+(face, dos, profil) de trois images chacune pour la marche.
+`tools/paint.html` les montre en grand et animées, et `?build` les enregistre.
+Pour retoucher un pixel, on change une lettre.
 
 **Le rendu en couches** (`src/render.js`) :
 

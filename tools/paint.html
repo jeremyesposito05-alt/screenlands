@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atelier pixel</title>
+<style>
+  body { margin: 0; padding: 16px; background: #1d1a26; color: #efe8dc; font: 14px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p { margin: 0 0 12px; color: #a69fb4; }
+  .row { display: flex; flex-wrap: wrap; gap: 24px; align-items: end; margin-bottom: 16px; }
+  .cell { display: flex; flex-direction: column; gap: 6px; align-items: center; font-size: 12px; color: #a69fb4; }
+  canvas { image-rendering: pixelated; display: block; }
+  .checker { background: repeating-conic-gradient(#3a3548 0% 25%, #2f2b3c 0% 50%) 0 0 / 16px 16px; }
+  .ground { background: #5d6b34; }
+  .error { color: #ff8a7a; }
+</style>
+</head>
+<body>
+<h1>Atelier pixel</h1>
+<p>Les sprites dessinés à la main, lettre par lettre, dans <code>assets/pixel/</code>. Chaque vue : ses images
+   fixes, puis sa marche animée, en grand et à la taille du jeu.
+   <a href="?build" style="color:#f2b83c">Enregistrer dans assets/sprites</a>.</p>
+<div id="status"></div>
+<div id="out"></div>
+<script src="../assets/pixel/hero.js"></script>
+<script>
+"use strict";
+const out = document.getElementById("out"), status = document.getElementById("status");
+const errors = [];
+
+// Une bande horizontale des images d'une vue, chacune calée en bas du cadre.
+function strip(name, frames) {
+  const { w, h } = PIXEL_FRAME;
+  const c = document.createElement("canvas");
+  c.width = w * frames.length; c.height = h;
+  const ctx = c.getContext("2d");
+  frames.forEach((rows, f) => {
+    const top = h - rows.length;
+    rows.forEach((row, y) => {
+      if (row.length !== w) errors.push(`${name}, image ${f}, ligne ${y} : ${row.length} pixels au lieu de ${w}`);
+      [...row].forEach((ch, x) => {
+        if (ch === ".") return;
+        const color = PIXEL_PALETTE[ch];
+        if (!color) { errors.push(`${name}, image ${f}, ligne ${y} : lettre inconnue « ${ch} »`); return; }
+        ctx.fillStyle = color;
+        ctx.fillRect(f * w + x, top + y, 1, 1);
+      });
+    });
+  });
+  return c;
+}
+
+function big(src, k, cls) {
+  const c = document.createElement("canvas");
+  c.width = src.width * k; c.height = src.height * k;
+  const ctx = c.getContext("2d"); ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(src, 0, 0, c.width, c.height);
+  c.className = cls;
+  return c;
+}
+
+// La marche, jouée en boucle : immobile, A, immobile, B.
+function animated(sheet, k, cls) {
+  const { w, h } = PIXEL_FRAME;
+  const c = document.createElement("canvas");
+  c.width = w * k; c.height = h * k; c.className = cls;
+  const ctx = c.getContext("2d"); ctx.imageSmoothingEnabled = false;
+  const order = [0, 1, 0, 2];
+  let i = 0;
+  setInterval(() => {
+    const f = order[i++ % 4] % (sheet.width / w);
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.drawImage(sheet, f * w, 0, w, h, 0, 0, c.width, c.height);
+  }, 125);
+  return c;
+}
+
+const sheets = {};
+for (const [name, frames] of Object.entries(PIXEL_ART)) {
+  const sheet = sheets[name] = strip(name, frames);
+  const row = document.createElement("div"); row.className = "row";
+  const label = (el, text) => { const d = document.createElement("div"); d.className = "cell"; d.append(el, text); return d; };
+  row.append(label(big(sheet, 8, "checker"), `${name} — ${frames.length} images`),
+             label(animated(sheet, 8, "checker"), "marche"),
+             label(animated(sheet, 3, "ground"), "taille téléphone"));
+  out.append(row);
+}
+status.innerHTML = errors.length ? `<p class="error">${errors.join("<br>")}</p>` : "";
+
+if (new URLSearchParams(location.search).has("build")) (async () => {
+  if (errors.length) return;
+  let done = 0;
+  for (const [name, sheet] of Object.entries(sheets)) {
+    const blob = await new Promise((ok) => sheet.toBlob(ok, "image/png"));
+    const res = await fetch(`/assets/sprites/${name}.png`, { method: "PUT", body: blob });
+    if (res.ok) done++;
+  }
+  status.innerHTML = `<p>${done} / ${Object.keys(sheets).length} images enregistrées dans assets/sprites.</p>`;
+})();
+</script>
+</body>
+</html>

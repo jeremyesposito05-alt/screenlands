@@ -11,10 +11,8 @@
 // link : écart de liaison entre taches (1 sépare des éléments très proches).
 // crop : [x0, y0, x1, y1] en fractions, pour ne garder qu'une partie.
 const RECIPES = [
-  // Le héros, en attendant la retouche à la main.
-  { src: "hero_sheet.webp", pick: 0, w: 20, h: 28, out: "hero_front", palette: "hero" },
-  { src: "hero_sheet.webp", pick: 1, w: 20, h: 28, out: "hero_side", palette: "hero" },
-  { src: "hero_sheet.webp", pick: 2, w: 20, h: 28, out: "hero_back", palette: "hero" },
+  // Le héros n'est plus tiré d'une planche : il est dessiné à la main dans
+  // assets/pixel/hero.js (voir tools/paint.html).
 
   // Le sol de la forêt : deux textures qui se répètent.
   { src: "ground_sheet.webp", pick: 0, w: 48, h: 48, out: "ground_grass", fill: true, colors: 12 },

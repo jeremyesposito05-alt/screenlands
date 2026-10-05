@@ -18,6 +18,9 @@ const Sprites = (() => {
     "door_arch", "door_left", "door_right", "door_pillar_a", "door_pillar_b",
     "tree_trunk", "tree_top", "lamp_pole", "lamp_head",
   ];
+  // Les images animées sont des bandes d'images côte à côte : la largeur
+  // d'une image. Les autres n'en ont qu'une.
+  const FRAME_W = { hero_front: 18, hero_side: 18, hero_back: 18 };
   const images = {};
   // Augmente à chaque image arrivée : le rendu s'en sert pour savoir que ce
   // qu'il a mis en cache est à refaire.
@@ -34,6 +37,9 @@ const Sprites = (() => {
   return {
     load,
     get: (name) => images[name] || null,
+    // Largeur d'une image dans la bande, et nombre d'images.
+    frameWidth: (name) => FRAME_W[name] || (images[name] ? images[name].width : 0),
+    frames: (name) => (images[name] ? Math.round(images[name].width / (FRAME_W[name] || images[name].width)) : 0),
     get version() { return version; },
     // Toutes les images sont là.
     get complete() { return Object.keys(images).length === NAMES.length; },
