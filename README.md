@@ -146,9 +146,9 @@ graphismes.
   portes, écrans entrevus derrière, camp s'il a été vu, coffres non ouverts,
   position.
 
-Les graphismes sont en cours : le décor de forêt (sol, haies, portes,
-rochers, arbres, lampadaires) et le héros sont des images ; ennemis,
-compagnons, coffres et objets sont encore des formes de couleur. Voir
+Les graphismes sont en cours : décor de forêt, héros, ennemis, compagnons,
+coffres, gemmes, feu, portail et la plupart des icônes sont des images ;
+l'égide et les reliques sont encore des formes de couleur. Voir
 « Graphismes » plus bas.
 
 Ne sont **pas** implémentés, volontairement : l'XP, les dépenses de la

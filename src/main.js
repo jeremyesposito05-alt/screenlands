@@ -25,11 +25,13 @@
   buttonIcon.width = buttonIcon.height = 96;
   buttonIcon.style.cssText = "display:block;width:100%;height:100%";
   attackButton.appendChild(buttonIcon);
-  let shownWeapon;
+  // Redessinée quand l'arme change, et quand une image arrive.
+  let shownWeapon, shownVersion;
   function syncButtons() {
     const weapon = Input.mode === "stick" && !Menu.isOpen() ? World.state.run.weapon : null;
-    if (weapon === shownWeapon) return;
+    if (weapon === shownWeapon && Sprites.version === shownVersion) return;
     shownWeapon = weapon;
+    shownVersion = Sprites.version;
     attackButton.hidden = !weapon;
     attackButton.setAttribute("aria-label", weapon ? ITEMS[weapon].name : "Attaquer");
     Render.iconInto(buttonIcon, weapon);

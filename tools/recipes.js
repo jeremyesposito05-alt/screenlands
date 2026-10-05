@@ -50,4 +50,51 @@ const RECIPES = [
   { src: "tree_sheet.webp", pick: 1, w: 56, h: 52, out: "tree_top", link: 1 },
   { src: "lamp_sheet.webp", pick: 0, w: 12, h: 44, out: "lamp_pole" },
   { src: "lamp_sheet.webp", pick: 1, w: 24, h: 38, out: "lamp_head" },
+
+  // Vague 2 : le bestiaire, chacun un peu plus grand que son carré de collision.
+  { src: "enemies_a_sheet.webp", pick: 0, w: 16, h: 16, out: "enemy_chaser", link: 1 },
+  { src: "enemies_a_sheet.webp", pick: 1, w: 16, h: 16, out: "enemy_ambusher", link: 1 },
+  { src: "enemies_a_sheet.webp", pick: 2, w: 16, h: 16, out: "enemy_pincer", link: 1 },
+  { src: "enemies_a_sheet.webp", pick: 3, w: 16, h: 16, out: "enemy_shy", link: 1 },
+  { src: "enemies_b_sheet.webp", pick: 0, w: 16, h: 16, out: "enemy_shooter" },
+  { src: "enemies_b_sheet.webp", pick: 1, w: 14, h: 16, out: "enemy_bomber" },
+  { src: "enemies_b_sheet.webp", pick: 2, w: 10, h: 10, out: "enemy_swarm" },
+  { src: "enemies_b_sheet.webp", pick: 3, w: 22, h: 20, out: "enemy_brute" },
+  { src: "bosses_sheet.webp", pick: 0, w: 28, h: 30, out: "enemy_guardian" },
+  { src: "bosses_sheet.webp", pick: 1, w: 20, h: 22, out: "enemy_hunter" },
+
+  // Les compagnons, un peu plus petits que le héros.
+  { src: "allies_sheet.webp", pick: 0, w: 16, h: 22, out: "ally_archer" },
+  { src: "allies_sheet.webp", pick: 1, w: 16, h: 22, out: "ally_warrior" },
+
+  // Coffres fermés, gemme en trois reflets, feu de camp et portail.
+  { src: "chest_sheet.webp", pick: 0, w: 16, h: 14, out: "chest_common" },
+  { src: "chest_sheet.webp", pick: 1, w: 16, h: 14, out: "chest_rare" },
+  { src: "chest_sheet.webp", pick: 2, w: 16, h: 14, out: "chest_epic" },
+  { src: "chest_sheet.webp", pick: 3, w: 16, h: 14, out: "chest_legendary" },
+  { src: "gem_sheet.webp", pick: 0, w: 9, h: 9, out: "gem_a" },
+  { src: "gem_sheet.webp", pick: 1, w: 9, h: 9, out: "gem_b" },
+  { src: "gem_sheet.webp", pick: 2, w: 9, h: 9, out: "gem_c" },
+  { src: "camp_sheet.webp", pick: 0, w: 22, h: 22, out: "campfire" },
+  { src: "camp_sheet.webp", pick: 2, w: 30, h: 28, out: "portal" },
+
+  // Les icônes des objets (pas encore : égide et reliques).
+  { src: "icons_a_sheet.webp", pick: 0, w: 12, h: 12, out: "icon_lantern" },
+  { src: "icons_a_sheet.webp", pick: 1, w: 12, h: 12, out: "icon_flask" },
+  { src: "icons_a_sheet.webp", pick: 2, w: 12, h: 12, out: "icon_fireTrail" },
+  { src: "icons_a_sheet.webp", pick: 3, w: 12, h: 12, out: "icon_orb" },
+  { src: "icons_a_sheet.webp", pick: 4, w: 12, h: 12, out: "icon_lightning" },
+  { src: "icons_a_sheet.webp", pick: 5, w: 12, h: 12, out: "icon_frost" },
+  { src: "icons_b_sheet.webp", pick: 0, w: 12, h: 12, out: "icon_sword" },
+  { src: "icons_b_sheet.webp", pick: 1, w: 12, h: 12, out: "icon_spear" },
+  { src: "icons_b_sheet.webp", pick: 2, w: 12, h: 12, out: "icon_bow" },
+  { src: "icons_b_sheet.webp", pick: 3, w: 12, h: 12, out: "icon_boomerang" },
+  { src: "icons_b_sheet.webp", pick: 4, w: 12, h: 12, out: "icon_feather" },
+  { src: "icons_b_sheet.webp", pick: 5, w: 12, h: 12, out: "icon_whetstone" },
+  { src: "icons_c_sheet.webp", pick: 0, w: 12, h: 12, out: "icon_gauntlet" },
+  { src: "icons_c_sheet.webp", pick: 1, w: 12, h: 12, out: "icon_lens" },
+  { src: "icons_c_sheet.webp", pick: 2, w: 12, h: 12, out: "icon_clover" },
+  { src: "icons_c_sheet.webp", pick: 3, w: 12, h: 12, out: "icon_magnet" },
+  { src: "icons_c_sheet.webp", pick: 4, w: 12, h: 12, out: "icon_heart" },
+  { src: "icons_c_sheet.webp", pick: 5, w: 12, h: 12, out: "icon_boots" },
 ];

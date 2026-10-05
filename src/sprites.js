@@ -17,6 +17,14 @@ const Sprites = (() => {
     "hedge_h", "hedge_corner", "hedge_v",
     "door_arch", "door_left", "door_right", "door_pillar_a", "door_pillar_b",
     "tree_trunk", "tree_top", "lamp_pole", "lamp_head",
+    "enemy_chaser", "enemy_ambusher", "enemy_pincer", "enemy_shy", "enemy_shooter",
+    "enemy_bomber", "enemy_swarm", "enemy_brute", "enemy_guardian", "enemy_hunter",
+    "ally_archer", "ally_warrior",
+    "chest_common", "chest_rare", "chest_epic", "chest_legendary",
+    "gem_a", "gem_b", "gem_c", "campfire", "portal",
+    ...["sword", "spear", "bow", "boomerang", "feather", "whetstone", "gauntlet", "lens", "clover",
+        "magnet", "heart", "boots", "lantern", "flask", "fireTrail", "orb", "lightning", "frost"]
+      .map((k) => `icon_${k}`),
   ];
   // Les images animées sont des bandes d'images côte à côte : la largeur
   // d'une image. Les autres n'en ont qu'une.
@@ -34,8 +42,26 @@ const Sprites = (() => {
     }
   }
 
+  // La silhouette blanche d'une image, pour le clignotement d'un coup reçu.
+  const whites = {};
+  function white(name) {
+    if (!whites[name] && images[name]) {
+      const img = images[name];
+      const c = document.createElement("canvas");
+      c.width = img.width; c.height = img.height;
+      const x = c.getContext("2d");
+      x.drawImage(img, 0, 0);
+      x.globalCompositeOperation = "source-in";
+      x.fillStyle = "#ffffff";
+      x.fillRect(0, 0, c.width, c.height);
+      whites[name] = c;
+    }
+    return whites[name] || null;
+  }
+
   return {
     load,
+    white,
     get: (name) => images[name] || null,
     // Largeur d'une image dans la bande, et nombre d'images.
     frameWidth: (name) => FRAME_W[name] || (images[name] ? images[name].width : 0),

@@ -144,6 +144,21 @@ const Render = (() => {
     if (state.banner) drawBanner(state.banner, state.phase === "dead");
   }
 
+  // Un personnage en image, centré sur `cx`, les pieds en `feet`, avec son
+  // ombre ; en blanc s'il vient d'être touché, soulevé de `bob` pixels.
+  function drawCharacter(name, cx, feet, flip = false, flash = false, bob = 0) {
+    const img = flash ? Sprites.white(name) : Sprites.get(name);
+    if (!img) return;
+    const alpha = ctx.globalAlpha;
+    ctx.globalAlpha = alpha * 0.35;
+    ctx.fillStyle = "rgb(30, 20, 50)";
+    ctx.beginPath();
+    ctx.ellipse(cx, feet, img.width * 0.35, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = alpha;
+    drawSprite(img, Math.round(cx - img.width / 2), Math.round(feet - img.height + 1 - bob), flip);
+  }
+
   // Une image, éventuellement retournée de gauche à droite.
   function drawSprite(img, x, y, flip = false, c = ctx) {
     if (!flip) { c.drawImage(img, x, y); return; }
@@ -403,12 +418,17 @@ const Render = (() => {
   }
 
   function drawFire(f) {
-    // Deux carrés qui palpitent : juste de quoi repérer le feu de loin.
-    const pulse = Math.sin(clock * 8) > 0 ? 1 : 0;
-    ctx.fillStyle = STYLE.fire;
-    ctx.fillRect(f.x - 7 - pulse, f.y - 7 - pulse, 14 + pulse * 2, 14 + pulse * 2);
-    ctx.fillStyle = STYLE.fireCore;
-    ctx.fillRect(f.x - 3, f.y - 3, 6, 6);
+    const img = Sprites.get("campfire");
+    if (img) {
+      drawSprite(img, Math.round(f.x - img.width / 2), Math.round(f.y - img.height / 2 - 3));
+    } else {
+      // Deux carrés qui palpitent : juste de quoi repérer le feu de loin.
+      const pulse = Math.sin(clock * 8) > 0 ? 1 : 0;
+      ctx.fillStyle = STYLE.fire;
+      ctx.fillRect(f.x - 7 - pulse, f.y - 7 - pulse, 14 + pulse * 2, 14 + pulse * 2);
+      ctx.fillStyle = STYLE.fireCore;
+      ctx.fillRect(f.x - 3, f.y - 3, 6, 6);
+    }
     // Le cercle où l'on se repose.
     ctx.strokeStyle = "rgba(240, 138, 60, 0.25)";
     ctx.beginPath();
@@ -420,6 +440,11 @@ const Render = (() => {
   // feu.
   function drawPortal(pt) {
     const r = Config.PORTAL_RADIUS;
+    const img = Sprites.get("portal");
+    if (img) {
+      drawSprite(img, Math.round(pt.x - img.width / 2), Math.round(pt.y - img.height / 2 - 3));
+      return;
+    }
     ctx.fillStyle = "rgba(150, 110, 230, 0.18)";
     ctx.beginPath();
     ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
@@ -434,7 +459,15 @@ const Render = (() => {
     }
   }
 
-  function drawGem(x, y, size) {
+  // Une gemme : en image, elle scintille, chacune à son rythme selon sa
+  // place ; l'interface la dessine immobile (`still`).
+  function drawGem(x, y, size, still = false) {
+    const glint = still ? 0 : Math.floor(clock * 4 + x * 0.37 + y * 0.21) % 6;
+    const img = Sprites.get(`gem_${"abcaaa"[glint]}`);
+    if (img) {
+      drawSprite(img, Math.round(x - img.width / 2), Math.round(y - img.height / 2));
+      return;
+    }
     const h = size / 2;
     ctx.fillStyle = STYLE.gem;
     ctx.beginPath();
@@ -446,15 +479,8 @@ const Render = (() => {
     ctx.fill();
   }
 
-  function drawEnemy(e) {
-    const h = e.size / 2;
-    const x = Math.round(e.x - h), y = Math.round(e.y - h);
-    // Endormi à l'entrée de la zone : dessiné terne.
-    ctx.globalAlpha = e.wake > 0 ? 0.45 : 1;
-    // Touché : il clignote en blanc pendant qu'il est étourdi. Mèche allumée,
-    // il clignote de plus en plus vite.
-    const flash = (e.stun > 0 && Math.floor(clock * 20) % 2 === 0) ||
-                  (e.fuse > 0 && Math.floor(clock * (10 + 30 * (1 - e.fuse / 0.7))) % 2 === 0);
+  // L'ancienne forme de couleur d'un ennemi, tant qu'il n'a pas d'image.
+  function drawEnemyShape(e, x, y, h, flash) {
     ctx.fillStyle = flash ? STYLE.hitFlash : STYLE[e.kind];
     if (e.kind === "bomber" || e.kind === "swarm") {
       // Les ronds : le Kamikaze et les membres d'essaim.
@@ -484,6 +510,26 @@ const Render = (() => {
       ctx.lineWidth = 1;
       ctx.strokeRect(x + 0.5, y + 0.5, e.size - 1, e.size - 1);
     }
+  }
+
+  function drawEnemy(e) {
+    const h = e.size / 2;
+    const x = Math.round(e.x - h), y = Math.round(e.y - h);
+    // Endormi à l'entrée de la zone : dessiné terne.
+    ctx.globalAlpha = e.wake > 0 ? 0.45 : 1;
+    // Touché : il clignote en blanc pendant qu'il est étourdi. Mèche allumée,
+    // il clignote de plus en plus vite.
+    const flash = (e.stun > 0 && Math.floor(clock * 20) % 2 === 0) ||
+                  (e.fuse > 0 && Math.floor(clock * (10 + 30 * (1 - e.fuse / 0.7))) % 2 === 0);
+    // En image, il regarde où il va et trottine ; sinon, sa forme de couleur.
+    const sprite = Sprites.get(`enemy_${e.kind}`);
+    if (sprite) {
+      const moving = e.wake <= 0 && e.stun <= 0;
+      const bob = moving && Math.floor(clock * 8 + e.x * 0.13) % 2 ? 1 : 0;
+      drawCharacter(`enemy_${e.kind}`, e.x, e.y + h, e.look && e.look.x < 0, flash, bob);
+    } else {
+      drawEnemyShape(e, x, y, h, flash);
+    }
     // Il prépare quelque chose (un tir, une charge) : un cadre blanc qui
     // clignote, le temps de réagir.
     if (e.windup > 0 && Math.floor(clock * 16) % 2 === 0) {
@@ -499,10 +545,11 @@ const Render = (() => {
     // Les solides ont une barre de vie, dès qu'ils sont entamés.
     if ((e.kind === "brute" || e.kind === "guardian" || e.maxHp >= 4) && e.hp < e.maxHp) {
       const w = Math.max(12, e.size);
+      const by = sprite ? Math.round(e.y + h - sprite.height) - 3 : y - 5;
       ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-      ctx.fillRect(e.x - w / 2, y - 5, w, 2);
+      ctx.fillRect(e.x - w / 2, by, w, 2);
       ctx.fillStyle = e.kind === "guardian" ? "#ffc93d" : STYLE.heart;
-      ctx.fillRect(e.x - w / 2, y - 5, w * Math.max(0, e.hp / e.maxHp), 2);
+      ctx.fillRect(e.x - w / 2, by, w * Math.max(0, e.hp / e.maxHp), 2);
     }
     // Une élite porte une couronne dorée qui scintille.
     if (e.elite && !flash) {
@@ -512,7 +559,7 @@ const Render = (() => {
     }
     // Deux yeux qui regardent où il va, comme les fantômes : c'est ce qui
     // trahit son intention. Les membres d'essaim sont trop petits pour ça.
-    if (!flash && e.kind !== "swarm") {
+    if (!flash && !sprite && e.kind !== "swarm") {
       const lx = e.look.x * 1.5, ly = e.look.y * 1.5;
       for (const ox of [-2.5, 2.5]) {
         ctx.fillStyle = STYLE.eye;
@@ -530,6 +577,12 @@ const Render = (() => {
   const ALLY_COLORS = { archer: "#7fd0ff", warrior: "#d9dde6" };
   function drawAlly(type, x, y, alpha = 1) {
     ctx.globalAlpha = alpha;
+    if (Sprites.get(`ally_${type}`)) {
+      const bob = Math.floor(clock * 8 + x * 0.2) % 2 ? 1 : 0;
+      drawCharacter(`ally_${type}`, x, y + 4, false, false, bob);
+      ctx.globalAlpha = 1;
+      return;
+    }
     ctx.fillStyle = STYLE.player;
     ctx.fillRect(x - 4, y - 4, 8, 8);
     ctx.fillStyle = ALLY_COLORS[type];
@@ -603,6 +656,10 @@ const Render = (() => {
     ctx.beginPath();
     ctx.arc(h.x, h.y, 13, 0, Math.PI * 2);
     ctx.fill();
+    if (Sprites.get("enemy_hunter")) {
+      drawCharacter("enemy_hunter", h.x, h.y + half, h.look && h.look.x < 0);
+      return;
+    }
     ctx.fillStyle = STYLE.hunter;
     ctx.fillRect(h.x - half, h.y - half, s, s);
     const lx = h.look.x * 1.5, ly = h.look.y * 1.5;
@@ -661,15 +718,20 @@ const Render = (() => {
     ctx.fillStyle = color;
     ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
     ctx.globalAlpha = 1;
-    ctx.fillStyle = STYLE.chest;
-    ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = STYLE.chestLid;
-    ctx.fillRect(x, y, w, 3);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-    ctx.fillStyle = color;
-    ctx.fillRect(c.x - 1, y + 2, 2, 3);
+    const img = Sprites.get(`chest_${c.tier}`) || Sprites.get("chest_common");
+    if (img) {
+      drawSprite(img, Math.round(c.x - img.width / 2), Math.round(c.y + h / 2 - img.height + 2));
+    } else {
+      ctx.fillStyle = STYLE.chest;
+      ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = STYLE.chestLid;
+      ctx.fillRect(x, y, w, 3);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+      ctx.fillStyle = color;
+      ctx.fillRect(c.x - 1, y + 2, 2, 3);
+    }
     if (c.tier === "legendary") {
       const a = clock * 3;
       ctx.fillStyle = "#fff6c9";
@@ -759,6 +821,11 @@ const Render = (() => {
 
   // Les icônes des objets, centrées en (x, y), dans un carré d'environ 10 px.
   function drawIcon(key, x, y) {
+    const img = Sprites.get(`icon_${key}`);
+    if (img) {
+      drawSprite(img, Math.round(x - img.width / 2), Math.round(y - img.height / 2));
+      return;
+    }
     ctx.save();
     ctx.translate(x, y);
     ctx.lineCap = "round";
@@ -1130,7 +1197,7 @@ const Render = (() => {
     }
     if (state.run.weapon) drawIcon(state.run.weapon, hx + 5, 8);
 
-    drawGem(Config.ZONE_W - 60, 8, 7);
+    drawGem(Config.ZONE_W - 60, 8, 7, true);
     text(`${state.run.carried}`, Config.ZONE_W - 54, 4, STYLE.text, "left");
     if (!state.zone.safe && !state.fire) {
       text(`×${World.gemValue(state.distance)}`, Config.ZONE_W - 4, 4, STYLE.dim, "right");
@@ -1226,6 +1293,7 @@ const Render = (() => {
     ctx.clearRect(0, 0, size, size);
     // L'icône tient dans environ 12 px de zone.
     ctx.setTransform(size / 12, 0, 0, size / 12, 0, 0);
+    ctx.imageSmoothingEnabled = false;
     if (key) drawIcon(key, 6, 6);
     ctx = saved;
   }
