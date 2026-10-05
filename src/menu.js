@@ -14,8 +14,10 @@ const Menu = (() => {
   let screen = null;
   // Bac à sable : les ennemis qu'on fait apparaître sont-ils des élites ?
   let eliteSpawn = false;
-  // Abandonner demande une confirmation : un second appui.
+  // Abandonner, et tout rembourser à l'atelier, demandent une confirmation :
+  // un second appui.
   let confirmQuit = false;
+  let confirmRefund = false;
 
   // --- Modes de commande ---
   const MODES = {
@@ -61,6 +63,7 @@ const Menu = (() => {
   function open(name) {
     screen = name;
     confirmQuit = false;
+    confirmRefund = false;
     Input.stop();
     overlay.hidden = false;
     pauseButton.hidden = true;
@@ -89,6 +92,14 @@ const Menu = (() => {
     switch (action) {
       case "play": return start(false);
       case "sandbox": return start(true);
+      case "shop": return open("shop");
+      case "back": return open("main");
+      case "buy": Upgrades.buy(data.key); confirmRefund = false; break;
+      case "refund":
+        if (!confirmRefund) { confirmRefund = true; break; }
+        Upgrades.refund();
+        confirmRefund = false;
+        break;
       case "resume": return close();
       case "controls":
         applyMode(Input.mode === "swipe" ? "stick" : "swipe", false);
@@ -130,6 +141,7 @@ const Menu = (() => {
     if (screen === "main") panel.innerHTML = mainScreen();
     else if (screen === "pause") panel.innerHTML = pauseScreen();
     else if (screen === "sandbox") panel.innerHTML = sandboxScreen();
+    else if (screen === "shop") panel.innerHTML = shopScreen();
   }
 
   function mainScreen() {
@@ -139,11 +151,35 @@ const Menu = (() => {
       <p class="sub">roguelite écran par écran</p>
       <div class="stack">
         ${btn("play", "Jouer", "", "big primary")}
+        ${btn("shop", `Atelier · ${d.bank} 💎`, "", "big")}
         ${btn("sandbox", "Bac à sable", "", "big")}
         ${btn("controls", `Commandes : ${MODES[Input.mode].label}`)}
       </div>
       <p class="note">Banque ${d.bank} · meilleur butin ${d.best}</p>
       <p class="note dim">Le bac à sable permet de tout essayer : armes, pouvoirs, ennemis, menace. Ce qu'on y gagne ne va pas à la banque.</p>`;
+  }
+
+  // L'atelier : une ligne par amélioration, ses niveaux en pastilles, et le
+  // prix du suivant. Un achat trop cher reste visible, grisé : on sait ce
+  // qu'on vise.
+  function shopScreen() {
+    const rows = Object.entries(Upgrades.LIST).map(([key, u]) => {
+      const n = Upgrades.level(key), price = Upgrades.cost(key);
+      const pips = u.costs.map((_, i) => `<i class="${i < n ? "on" : ""}"></i>`).join("");
+      const action = price === null
+        ? `<button type="button" class="small" disabled>max</button>`
+        : btn("buy", `${price} 💎`, `data-key="${key}"${Upgrades.affordable(key) ? "" : " disabled"}`, "small");
+      return `<div class="row upgrade"><span><b>${u.name}</b> <em class="pips">${pips}</em><br><small>${u.hint}</small></span>${action}</div>`;
+    }).join("");
+    const spent = Upgrades.spent();
+    return `
+      <div class="head">
+        <h2>Atelier</h2>
+        ${btn("back", "Retour", "", "primary")}
+      </div>
+      <p class="note">Banque <b class="gold">${Save.data.bank} 💎</b> · pour toutes les expéditions à venir</p>
+      <section>${rows}</section>
+      <div class="stack foot">${spent ? btn("refund", confirmRefund ? `Confirmer : rendre ${spent} 💎` : "Tout rembourser", "", confirmRefund ? "danger" : "") : ""}</div>`;
   }
 
   function pauseScreen() {

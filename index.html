@@ -181,6 +181,16 @@
     #panel button.tier-epic { border-color: #b36bff; color: #d2a8ff; }
     #panel button.tier-legendary { border-color: #ffc93d; color: #ffd873; }
     #panel .foot { margin-bottom: 8px; }
+    #panel .upgrade { padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+    #panel .upgrade:last-child { border-bottom: 0; }
+    #panel .upgrade b { width: auto; color: #dfe5ee; }
+    #panel .upgrade small { color: #8f9bad; }
+    #panel .pips { font-style: normal; margin-left: 4px; }
+    #panel .pips i { display: inline-block; width: 7px; height: 7px; margin-right: 3px; border-radius: 2px; background: #2a3040; }
+    #panel .pips i.on { background: #f2c44d; }
+    #panel .gold { color: #f2c44d; }
+    #panel button:disabled { opacity: 0.4; cursor: default; }
+    #panel .upgrade button { min-width: 74px; }
     #attack {
       position: fixed;
       right: calc(env(safe-area-inset-right) + 22px);
@@ -243,6 +253,7 @@
   <script src="src/nav.js"></script>
   <script src="src/enemies.js"></script>
   <script src="src/save.js"></script>
+  <script src="src/upgrades.js"></script>
   <script src="src/input.js"></script>
   <script src="src/weapons.js"></script>
   <script src="src/allies.js"></script>

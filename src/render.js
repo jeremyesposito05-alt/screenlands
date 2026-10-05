@@ -1132,6 +1132,7 @@ const Render = (() => {
   // au-dessus. En marche, il joue ses images dans l'ordre immobile, pas A,
   // immobile, pas B ; une image seule sautille d'un pixel à la place.
   const WALK = [0, 1, 0, 2];
+  const HERO_RIM = "rgba(248, 225, 185, 0.85)";
   // « En marche » tient un instant après le dernier pas : sur un écran à
   // 120 Hz, certaines images tombent entre deux pas de physique.
   const lastStep = { x: 0, y: 0, moving: false, linger: 0 };
@@ -1148,8 +1149,15 @@ const Render = (() => {
     const name = f.y < 0 && !f.x ? "hero_back" : f.x ? "hero_side" : "hero_front";
     const img = Sprites.get(name);
     if (img) {
+      // Pour qu'on le retrouve d'un coup d'œil : une flaque de lumière
+      // chaude sous lui, une ombre franche, et en course un liseré crème.
       const feet = p.y + p.size / 2;
-      ctx.fillStyle = "rgba(30, 20, 50, 0.35)";
+      const pool = ctx.createRadialGradient(p.x, feet - 2, 0, p.x, feet - 2, 14);
+      pool.addColorStop(0, "rgba(255, 236, 190, 0.32)");
+      pool.addColorStop(1, "rgba(255, 236, 190, 0)");
+      ctx.fillStyle = pool;
+      ctx.fillRect(p.x - 14, feet - 16, 28, 28);
+      ctx.fillStyle = "rgba(30, 20, 50, 0.5)";
       ctx.beginPath();
       ctx.ellipse(p.x, feet, 6, 2, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1160,6 +1168,8 @@ const Render = (() => {
       const x = Math.round(p.x - fw / 2), y = Math.round(feet - img.height + 1 - bob);
       ctx.save();
       if (f.x < 0) { ctx.translate(x + fw, y); ctx.scale(-1, 1); } else ctx.translate(x, y);
+      const rim = lastStep.moving && Sprites.outline(name, frame, HERO_RIM);
+      if (rim) ctx.drawImage(rim, -1, -1);
       ctx.drawImage(img, frame * fw, 0, fw, img.height, 0, 0, fw, img.height);
       ctx.restore();
       return;

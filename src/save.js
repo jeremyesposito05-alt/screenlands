@@ -6,7 +6,7 @@
 // Elle est volontairement séparée de l'expédition en cours, qui vit dans
 // World et meurt avec le joueur. Pour l'instant elle ne contient que la
 // banque (le butin mis à l'abri), le record du plus gros butin sécurisé
-// d'un coup et le mode de commande choisi ; les déblocages viendront ici.
+// d'un coup, le mode de commande choisi et les achats de l'atelier.
 //
 // Stockée dans le navigateur. Le stockage peut être indisponible (navigation
 // privée, données effacées) : le jeu marche alors quand même, il oublie
@@ -15,7 +15,8 @@
 const Save = (() => {
   const KEY = "screenlands.save.v1";
   // `controls` : "swipe" (glisser) ou "stick" (joystick), voir Input.
-  const data = { bank: 0, best: 0, controls: "swipe" };
+  // `upgrades` : le niveau acheté de chaque amélioration de l'atelier.
+  const data = { bank: 0, best: 0, controls: "swipe", upgrades: {} };
 
   try {
     Object.assign(data, JSON.parse(localStorage.getItem(KEY)) || {});
@@ -36,6 +37,16 @@ const Save = (() => {
     },
     setControls(mode) {
       data.controls = mode;
+      write();
+    },
+    buyUpgrade(key, cost) {
+      data.bank -= cost;
+      data.upgrades[key] = (data.upgrades[key] || 0) + 1;
+      write();
+    },
+    refundUpgrades(amount) {
+      data.bank += amount;
+      data.upgrades = {};
       write();
     },
   };

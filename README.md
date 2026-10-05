@@ -141,7 +141,12 @@ graphismes.
 
   Se reposer au camp fait redescendre la menace d'une minute ; sous le
   dernier cran, le Chasseur perd la trace.
-- **La banque** est conservée d'une partie à l'autre, dans le navigateur.
+- **La banque** est conservée d'une partie à l'autre, dans le navigateur, et se
+  dépense à **l'atelier** (menu principal) : dix améliorations permanentes de
+  un à trois niveaux, de plus en plus chers (vitesse, dégâts, cadence,
+  attraction, cœur, chance, valeur des gemmes, menace plus lente, partir avec
+  une épée ou un archer). Tout peut être remboursé d'un coup pour essayer
+  autre chose. Les prix sont dans `src/upgrades.js`.
 - **Une mini-carte** en haut à droite : camp de base, écrans visités et leurs
   portes, écrans entrevus derrière, camp s'il a été vu, coffres non ouverts,
   position.
@@ -151,8 +156,7 @@ coffres, gemmes, feu, portail et la plupart des icônes sont des images ;
 l'égide et les reliques sont encore des formes de couleur. Voir
 « Graphismes » plus bas.
 
-Ne sont **pas** implémentés, volontairement : l'XP, les dépenses de la
-banque, la progression permanente, le glissement d'écran.
+Ne sont **pas** implémentés, volontairement : l'XP, le glissement d'écran.
 Chaque système sera validé avant d'ajouter le suivant.
 
 Tous les chiffres d'équilibrage sont regroupés en bas de `src/config.js`.
@@ -230,7 +234,8 @@ src/powers.js        les pouvoirs automatiques
 src/loot.js          la rareté des coffres et le tirage de leur contenu
 src/nav.js           plus court chemin des ennemis autour des obstacles
 src/enemies.js       les ennemis : visée, capacité et statistiques assemblées
-src/save.js          la progression permanente (la banque)
+src/save.js          la progression permanente : banque, record, achats
+src/upgrades.js      l'atelier : les améliorations permanentes et leurs prix
 src/input.js         clavier et tactile : modes glisser et joystick
 src/weapons.js       les armes en action : coups de mêlée et projectiles
 src/allies.js        les compagnons : la file, leurs attaques, la chute et le relèvement

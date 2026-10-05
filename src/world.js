@@ -156,6 +156,7 @@ const World = (() => {
     state.hunterComing = null;
     state.visited.clear();
     recomputeStats();
+    Upgrades.equip(state);
   }
 
   // Les caractéristiques changent à chaque objet pris ou perdu. Un cœur de
@@ -367,7 +368,7 @@ const World = (() => {
   function updateThreat(dt) {
     const r = state.run;
     if (r.threatFrozen > 0) r.threatFrozen = Math.max(0, r.threatFrozen - dt);
-    else if (!state.zone.safe) r.threat += dt;
+    else if (!state.zone.safe) r.threat += dt * state.stats.threatRate;
     const level = threatLevel();
     if (level > state.threatLevel && THREAT_NEWS[level]) {
       showBanner(...THREAT_NEWS[level], 3);

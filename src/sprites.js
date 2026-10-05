@@ -59,9 +59,40 @@ const Sprites = (() => {
     return whites[name] || null;
   }
 
+  // Le contour extérieur d'une image de la bande : les pixels transparents
+  // qui touchent l'image, dans une toile plus grande d'un pixel de chaque
+  // côté. Sert à détacher le héros du sol quand il court.
+  const outlines = {};
+  function outline(name, frame, color) {
+    const key = `${name}|${frame}|${color}`;
+    if (!outlines[key] && images[name]) {
+      const img = images[name], fw = FRAME_W[name] || img.width, h = img.height;
+      const src = document.createElement("canvas");
+      src.width = fw; src.height = h;
+      const s = src.getContext("2d");
+      s.drawImage(img, frame * fw, 0, fw, h, 0, 0, fw, h);
+      const a = s.getImageData(0, 0, fw, h).data;
+      const solid = (x, y) => x >= 0 && y >= 0 && x < fw && y < h && a[(y * fw + x) * 4 + 3] > 127;
+      const c = document.createElement("canvas");
+      c.width = fw + 2; c.height = h + 2;
+      const o = c.getContext("2d");
+      o.fillStyle = color;
+      for (let y = -1; y <= h; y++) {
+        for (let x = -1; x <= fw; x++) {
+          if (!solid(x, y) && (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1))) {
+            o.fillRect(x + 1, y + 1, 1, 1);
+          }
+        }
+      }
+      outlines[key] = c;
+    }
+    return outlines[key] || null;
+  }
+
   return {
     load,
     white,
+    outline,
     get: (name) => images[name] || null,
     // Largeur d'une image dans la bande, et nombre d'images.
     frameWidth: (name) => FRAME_W[name] || (images[name] ? images[name].width : 0),
