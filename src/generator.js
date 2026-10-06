@@ -33,17 +33,18 @@ const Generator = (() => {
 
   // Une carte trop profonde est retirée avec une graine dérivée, pour que la
   // même graine de départ redonne toujours la même carte.
-  function generate(seed) {
+  // `opts.extraChests` : des coffres de plus (l'atelier).
+  function generate(seed, opts = {}) {
     let map;
     for (let attempt = 0; attempt < 50; attempt++) {
-      map = build(attempt ? deriveSeed(seed, attempt) : seed);
+      map = build(attempt ? deriveSeed(seed, attempt) : seed, opts);
       if (map.depth <= Config.MAP_MAX_DISTANCE) break;
     }
     map.seed = seed;
     return map;
   }
 
-  function build(seed) {
+  function build(seed, opts = {}) {
     const rng = makeRandom(seed);
     const size = Config.MAP_SIZE;
     const mid = Math.floor(size / 2);
@@ -153,7 +154,7 @@ const Generator = (() => {
       (c) => c.distance <= LOOT.NEAR_MAX, (c) => c.distance);
     hide({ tier: "rare", item: rng.pick(LOOT.farWeapons) },
       (c) => c.distance >= LOOT.FAR_MIN, (c) => -c.distance);
-    for (let i = 0; i < LOOT.RANDOM_CHESTS; i++) {
+    for (let i = 0; i < LOOT.RANDOM_CHESTS + (opts.extraChests || 0); i++) {
       const pool = free();
       if (!pool.length) break;
       const c = rng.pick(pool);

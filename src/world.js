@@ -128,6 +128,11 @@ const World = (() => {
     // les secousses de l'écran les lisent, puis main.js vide la liste. Les
     // règles n'en dépendent jamais.
     events: [],
+    // La super-gemme de la zone, s'il y a des rôdeurs : {x, y, size} ou null ;
+    // et le temps qui reste avant que les rôdeurs apeurés redeviennent
+    // dangereux.
+    superGem: null,
+    frightened: 0,
     // Mode test (voir sandbox) : banque intacte ; `god` rend invincible.
     sandbox: false,
     god: false,
@@ -141,7 +146,7 @@ const World = (() => {
   // d'artefact, plus rien de ce qui concernait l'ancienne carte. Le butin
   // porté n'est pas touché ici : la mort le perd, le portail le garde.
   function newMap(seed) {
-    ZoneRegistry.load(Generator.generate(seed ?? Generator.freshSeed()));
+    ZoneRegistry.load(Generator.generate(seed ?? Generator.freshSeed(), { extraChests: Upgrades.extraChests() }));
     const r = state.run;
     r.taken.clear();
     r.killed.clear();
@@ -179,6 +184,8 @@ const World = (() => {
   // `seed` sert à rejouer une carte précise ; sans elle, la carte est neuve.
   function newExpedition(seed) {
     const p = state.player;
+    // Le mode est fixé pour toute l'expédition, avant de tirer la carte.
+    state.run.mode = Save.data.mode in Config.MODES ? Save.data.mode : "normal";
     newMap(seed);
     state.run.carried = 0;
     p.hp = p.maxHp;
@@ -285,6 +292,23 @@ const World = (() => {
         slot: i,
       }));
     });
+
+    // Les rôdeurs : de plus en plus souvent loin du camp de base et quand la
+    // menace monte. Là où il y en a, une super-gemme les attend, au point du
+    // feu de camp (toujours atteignable).
+    state.superGem = null;
+    state.frightened = 0;
+    if (planned > 0 && distance >= Config.PROWLER_FROM) {
+      const rng = makeRandom(deriveSeed(seed, cx, cy, 300));
+      const chance = Math.min(Config.PROWLER_CHANCE_MAX,
+        Config.PROWLER_CHANCE + Config.PROWLER_CHANCE_PER_DISTANCE * distance + 0.05 * level);
+      const count = rng.chance(chance) ? 1 + (distance >= 6 && rng.chance(0.35) ? 1 : 0) : 0;
+      const far = zone.spawns.slice().sort((a, b) => Math.hypot(b.x - p.x, b.y - p.y) - Math.hypot(a.x - p.x, a.y - p.y));
+      for (let k = 0; k < count; k++) {
+        state.enemies.push(Enemies.spawn("prowler", far[k % far.length], distance, { speed: Config.THREAT_SPEED * level }));
+      }
+      if (count && zone.fire) state.superGem = { kind: "superGem", x: zone.fire.x, y: zone.fire.y, size: 10 };
+    }
   }
 
   // La grille de navigation de la zone pour des corps de cette taille, faite
@@ -414,7 +438,8 @@ const World = (() => {
   // Ce que vaut une gemme à cette distance, Couronne d'avarice comprise.
   function gemValue(distance) {
     const mul = state.stats ? state.stats.gemMul : 1;
-    return Math.round(Config.GEM_BASE * 2 ** Math.max(0, distance - 1) * mul);
+    const mode = Config.MODES[state.run.mode] || Config.MODES.normal;
+    return Math.max(1, Math.round(Config.GEM_BASE * (1 + distance) * mul * mode.gems));
   }
 
   function speed() {
@@ -518,6 +543,7 @@ const World = (() => {
       pickUp(g);
       return false;
     });
+    takeSuperGem(dt);
     openChest();
     pickUpDrops();
     restAtFire();
@@ -533,6 +559,10 @@ const World = (() => {
       // Un ennemi soufflé par une explosion pendant ce même pas ne joue plus.
       if (e.hp <= 0) continue;
       Enemies.step(e, enemyCtx, dt);
+      if (e.frightened > 0 && Physics.overlapsBody(p, e)) {
+        devour(e);
+        continue;
+      }
       if (p.invuln <= 0 && Enemies.harmful(e) && Physics.overlapsBody(p, e)) hurt(e);
       if (state.phase === "dead") return;
     }
@@ -540,6 +570,38 @@ const World = (() => {
     if (state.phase === "dead") return;
 
     changeZoneIfNeeded();
+  }
+
+  // La super-gemme : les rôdeurs deviennent bleus et fuient pendant
+  // FRIGHT_TIME ; la traque s'inverse.
+  function takeSuperGem(dt) {
+    if (state.frightened > 0) {
+      state.frightened = Math.max(0, state.frightened - dt);
+      for (const e of state.enemies) if (e.type === "prowler") e.frightened = state.frightened;
+    }
+    const g = state.superGem;
+    if (!g || !Physics.overlapsBody(state.player, g)) return;
+    state.superGem = null;
+    state.frightened = Config.FRIGHT_TIME;
+    for (const e of state.enemies) if (e.type === "prowler") { e.frightened = Config.FRIGHT_TIME; e.waypoint = null; }
+    emit("superGem", g);
+    showBanner("Super-gemme !", "les rôdeurs fuient : attrape-les", 2);
+  }
+
+  // Un rôdeur apeuré attrapé : il disparaît pour cette visite et lâche une
+  // gerbe de gemmes, de plus en plus grosse à chaque rôdeur de la même
+  // super-gemme, comme les fantômes de Pac-Man.
+  function devour(e) {
+    const i = state.enemies.indexOf(e);
+    if (i >= 0) state.enemies.splice(i, 1);
+    state.devoured = state.frightened > 0 ? (state.devoured || 0) + 1 : 1;
+    const n = 2 + 2 * state.devoured, value = gemValue(state.distance);
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * Math.PI * 2;
+      state.gems.push({ kind: "gem", id: null, x: e.x + Math.cos(a) * 9, y: e.y + Math.sin(a) * 9, size: Config.GEM_SIZE, value });
+    }
+    emit("devour", e);
+    state.popups.push({ x: e.x, y: e.y - 8, text: `rôdeur ×${state.devoured}`, time: 1 });
   }
 
   function kill(e) {
@@ -739,7 +801,7 @@ const World = (() => {
     if (carried > 0) {
       // Au bac à sable, le butin ne compte pas : la vraie banque reste
       // intacte.
-      if (!state.sandbox) Save.deposit(carried);
+      if (!state.sandbox) Save.deposit(carried, state.run.mode);
       state.run.carried = 0;
     }
     Generator.moveCamp(ZoneRegistry.map);
@@ -781,6 +843,13 @@ const World = (() => {
     const p = state.player;
     // Invincible au bac à sable : rien ne passe, pas même le Chasseur.
     if (state.god) return;
+    // L'Esquive de l'atelier : le coup passe à côté.
+    if (Math.random() < state.stats.dodge) {
+      p.invuln = 0.4;
+      emit("block");
+      state.popups.push({ x: p.x, y: p.y - 6, text: "esquive", time: 0.6 });
+      return;
+    }
     // L'Égide prend le coup à la place du joueur.
     if (Powers.absorb(state, state.run.powers)) {
       emit("block");
@@ -835,13 +904,19 @@ const World = (() => {
       return;
     }
     emit("death");
-    const lost = state.run.carried;
+    // Selon le mode et le coffre-fort de l'atelier, une part du butin porté
+    // est sauvée et va à la banque.
+    const carried = state.run.carried;
+    const saved = Math.floor(carried * Upgrades.keepOnDeath(state.run.mode));
+    if (saved > 0 && !state.sandbox) Save.deposit(saved, state.run.mode);
     state.run.carried = 0;
     state.phase = "dead";
     state.deadTimer = Config.DEATH_PAUSE;
     state.swing = null;
     state.projectiles = [];
-    showBanner("Expédition perdue", lost > 0 ? `-${lost} de butin, équipement perdu` : "équipement perdu");
+    const lost = carried - saved;
+    showBanner("Expédition perdue", saved > 0 ? `${saved} sauvé · -${lost}, équipement perdu`
+      : lost > 0 ? `-${lost} de butin, équipement perdu` : "équipement perdu");
   }
 
   function changeZoneIfNeeded() {
@@ -960,6 +1035,10 @@ const World = (() => {
       });
       for (const e of group) e.wake = 0.3;
       state.enemies.push(...group);
+      // Un rôdeur vient avec sa super-gemme, au centre de la salle.
+      if (type === "prowler" && !state.superGem) {
+        state.superGem = { kind: "superGem", x: Config.ZONE_W / 2, y: Config.ZONE_H / 2, size: 10 };
+      }
     },
     killAll() {
       for (const e of state.enemies) {

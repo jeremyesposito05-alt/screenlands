@@ -69,10 +69,18 @@ const Config = Object.freeze({
   MAP_MAX_DISTANCE: 9,
 
   // --- Stop ou encore ---
-  // Une gemme vaut GEM_BASE x 2^(distance - 1) : 1, 2, 4, 8... La distance
-  // est le nombre d'écrans à traverser depuis le camp de base, par le plus
-  // court chemin.
+  // Une gemme vaut GEM_BASE x (1 + distance) : 2, 3, 4... La distance est le
+  // nombre d'écrans à traverser depuis le camp de base, par le plus court
+  // chemin. (Elle doublait à chaque écran : une bonne partie rapportait
+  // 4 000 gemmes et vidait l'atelier d'un coup.)
   GEM_BASE: 1,
+  // Les modes de difficulté, choisis avant chaque expédition : ce que vaut
+  // une gemme, et la part du butin porté sauvée à la mort.
+  MODES: {
+    easy: { name: "facile", gems: 0.5, keep: 1 },
+    normal: { name: "normal", gems: 1, keep: 0.25 },
+    hard: { name: "difficile", gems: 1.5, keep: 0 },
+  },
   GEM_SIZE: 8,
   // À quelle distance du feu de camp le butin est mis à l'abri.
   CAMP_RADIUS: 20,
@@ -92,6 +100,15 @@ const Config = Object.freeze({
   ENEMY_WAKE: 0.6,
   // Un ennemi n'apparaît jamais plus près que ça du joueur qui entre.
   SPAWN_SAFE_DISTANCE: 90,
+
+  // Les rôdeurs (fantômes de Pac-Man, impossibles à tuer) : à partir de quelle
+  // distance, avec quelle chance par salle, et combien de temps la
+  // super-gemme les rend bleus.
+  PROWLER_FROM: 2,
+  PROWLER_CHANCE: 0.1,
+  PROWLER_CHANCE_PER_DISTANCE: 0.06,
+  PROWLER_CHANCE_MAX: 0.65,
+  FRIGHT_TIME: 6,
   // Un point de vie de plus tous les ENEMY_HP_EVERY écrans de distance.
   ENEMY_HP_EVERY: 3,
   // Touché, un ennemi est repoussé et reste étourdi, donc inoffensif, un

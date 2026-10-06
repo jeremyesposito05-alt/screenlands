@@ -44,6 +44,8 @@ const Sound = (() => {
     phoenix: { volume: 0.7 },
     legendary: { volume: 0.7 },
     victory: { volume: 0.7 },
+    superGem: { volume: 0.7 },
+    devour: { volume: 0.65, vary: 0.05 },
   };
   // Un même bruitage n'est pas rejoué plus souvent (en secondes).
   const MIN_GAP = 0.05;

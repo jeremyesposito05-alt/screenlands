@@ -89,6 +89,13 @@ const Enemies = (() => {
       const r = 11 + 9 * Math.sin(e.age * 2.4 + e.angle * 1.7);
       return { x: p.x + Math.cos(a) * r, y: p.y + Math.sin(a) * r };
     },
+
+    // La fuite : droit à l'opposé du joueur. C'est ce que font les rôdeurs
+    // quand la super-gemme les a rendus bleus.
+    flee(e, p) {
+      const d = Math.hypot(e.x - p.x, e.y - p.y) || 1;
+      return { x: e.x + ((e.x - p.x) / d) * 96, y: e.y + ((e.y - p.y) / d) * 96 };
+    },
   };
 
   // --- Capacités ---
@@ -185,6 +192,11 @@ const Enemies = (() => {
       name: "Gardien", kind: "guardian", from: Infinity, size: 14, hp: 16, damage: 1, speed: -10, target: "player", heavy: true,
       ability: { name: "dash", every: 3.2, windup: 0.6, speed: 165, time: 0.45 },
     },
+    // Le rôdeur, le fantôme de Pac-Man : rapide, collant, impossible à tuer.
+    // Les coups le repoussent et l'étourdissent, sans plus. World en place un
+    // ou deux dans certaines salles, avec une super-gemme : ramassée, elle le
+    // rend bleu (`frightened`) ; il fuit, et le toucher le dévore.
+    prowler: { name: "Rôdeur", kind: "prowler", from: Infinity, size: 10, hp: Infinity, damage: 1, speed: 6, target: "player" },
     // Le Chasseur non plus : World le fait venir au dernier palier de menace.
     // Invincible, il ne se laisse même pas étourdir.
     hunter: { name: "Chasseur", kind: "hunter", from: Infinity, size: 10, hp: Infinity, damage: 1, speed: 0, target: "player" },
@@ -270,9 +282,9 @@ const Enemies = (() => {
     return out;
   }
 
-  // Un ennemi qui peut faire mal : réveillé et pas étourdi.
+  // Un ennemi qui peut faire mal : réveillé, pas étourdi, pas apeuré.
   function harmful(e) {
-    return e.wake <= 0 && e.stun <= 0 && e.hp > 0;
+    return e.wake <= 0 && e.stun <= 0 && e.hp > 0 && !(e.frightened > 0);
   }
 
   // Encaisse un coup venu de `dir` et renvoie true s'il en meurt. Sans
@@ -324,7 +336,9 @@ const Enemies = (() => {
     // Une cible hors de l'écran (devant un joueur qui regarde une porte, par
     // exemple) est ramenée à l'intérieur des murs.
     let raw;
-    if (e.lunge > 0) {
+    if (e.frightened > 0) {
+      raw = TARGETS.flee(e, player);
+    } else if (e.lunge > 0) {
       e.lunge -= dt;
       raw = { x: player.x, y: player.y };
     } else {
@@ -355,7 +369,7 @@ const Enemies = (() => {
     // d'abord, l'autre s'il est bloqué. Sans jamais dépasser le point. Pris
     // dans le givre, il va deux fois moins vite.
     e.slow = Math.max(0, (e.slow || 0) - dt);
-    const budget = e.speed * dt * (e.slow > 0 ? 0.5 : 1);
+    const budget = e.speed * dt * (e.slow > 0 ? 0.5 : 1) * (e.frightened > 0 ? 0.55 : 1);
     const dx = e.waypoint.x - e.x;
     const dy = e.waypoint.y - e.y;
     const axes = Math.abs(dx) >= Math.abs(dy) ? [["x", dx], ["y", dy]] : [["y", dy], ["x", dx]];

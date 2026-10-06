@@ -1,4 +1,4 @@
-# Screenlands
+# LabyRun Survivor (ex-Screenlands)
 
 Roguelite d'exploration en 2D vue de dessus, jouable dans le navigateur.
 
@@ -43,7 +43,9 @@ graphismes.
   l'abri et rend les cœurs ; puis le feu s'éteint et un autre s'allume
   ailleurs, à au moins trois écrans. Passer devant sans rien à y faire ne le
   gaspille pas. Aucun ennemi autour du feu.
-- **Des gemmes** dont la valeur double à chaque écran d'éloignement du camp
+- **Des gemmes** qui valent 1 + la distance au camp de base (2, 3, 4…), selon
+  le mode. (Elles doublaient à chaque écran, ce qui vidait l'atelier en une
+  partie.) Ancienne formulation : des gemmes dont la valeur double à chaque écran d'éloignement du camp
   de base, compté par le plus court chemin : 1, 2, 4, 8... Elles s'ajoutent
   au butin porté, affiché en haut à droite.
 - **Quatre ennemis inspirés des fantômes de Pac-Man**, qui se déplacent tous
@@ -142,10 +144,11 @@ graphismes.
   Se reposer au camp fait redescendre la menace d'une minute ; sous le
   dernier cran, le Chasseur perd la trace.
 - **La banque** est conservée d'une partie à l'autre, dans le navigateur, et se
-  dépense à **l'atelier** (menu principal) : dix améliorations permanentes de
-  un à trois niveaux, de plus en plus chers (vitesse, dégâts, cadence,
-  attraction, cœur, chance, valeur des gemmes, menace plus lente, partir avec
-  une épée ou un archer). Tout peut être remboursé d'un coup pour essayer
+  dépense à **l'atelier** (menu principal) : quatorze améliorations permanentes de
+  un à huit niveaux, de plus en plus chers (vitesse, dégâts, cadence,
+  attraction, cœurs, esquive, chance, valeur des gemmes, menace plus lente,
+  coffre-fort, coffres en plus, équipement de départ, et une lame réservée au
+  mode difficile). Tout peut être remboursé d'un coup pour essayer
   autre chose. Les prix sont dans `src/upgrades.js`.
 - **Une mini-carte** en haut à droite : camp de base, écrans visités et leurs
   portes, écrans entrevus derrière, camp s'il a été vu, coffres non ouverts,
@@ -156,6 +159,13 @@ coffres, gemmes, feu, portail et la plupart des icônes sont des images ;
 l'égide et les reliques sont encore des formes de couleur. Voir
 « Graphismes » plus bas.
 
+- **Trois modes**, choisis avant chaque expédition : facile (le butin porté est
+  gardé à la mort, gemmes ×0,5), normal (25 % gardé, jusqu'à 60 % avec le
+  coffre-fort), difficile (tout perdu, gemmes ×1,5, achats réservés).
+- **Des rôdeurs**, les fantômes de Pac-Man : rapides, collants, impossibles à
+  tuer. Là où il y en a, une **super-gemme** les rend bleus pendant 6 s : ils
+  fuient, et les attraper fait gicler des gemmes, de plus en plus à chaque
+  rôdeur.
 - **Du son** : une trentaine de bruitages (coups, gemmes qui montent la gamme
   quand on les enchaîne, coffres selon leur rareté, coups reçus, alertes de
   menace, Chasseur) et une musique qui suit la situation : calme au camp de

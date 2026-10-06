@@ -91,9 +91,12 @@ const Menu = (() => {
     const S = World.sandbox;
     Sound.play(action === "buy" ? "buy" : "click");
     switch (action) {
-      case "play": return start(false);
+      case "play": Save.clearNotice(); return start(false);
       case "sandbox": return start(true);
       case "shop": return open("shop");
+      case "mode":
+        Save.setMode(MODE_ORDER[(MODE_ORDER.indexOf(Save.data.mode) + 1) % MODE_ORDER.length]);
+        break;
       case "back": return open("main");
       case "buy": Upgrades.buy(data.key); confirmRefund = false; break;
       case "refund":
@@ -159,13 +162,24 @@ const Menu = (() => {
     </div>`;
   }
 
+  // Ce que change chaque mode, en une ligne.
+  const MODE_HELP = {
+    easy: "à la mort, tu gardes tout le butin porté · gemmes ×0,5",
+    normal: "à la mort, tu gardes 25 % du butin porté (plus avec le coffre-fort)",
+    hard: "à la mort, tu perds tout · gemmes ×1,5 · ouvre des achats réservés",
+  };
+  const MODE_ORDER = ["easy", "normal", "hard"];
+
   function mainScreen() {
     const d = Save.data;
     return `
-      <h1>Screenlands</h1>
-      <p class="sub">roguelite écran par écran</p>
+      <h1>LabyRun</h1>
+      <p class="sub">survivor</p>
+      ${d.refundNotice ? `<p class="note gold">L'atelier a changé : tes ${d.refundNotice} 💎 d'achats t'ont été rendus.</p>` : ""}
       <div class="stack">
         ${btn("play", "Jouer", "", "big primary")}
+        ${btn("mode", `Mode : ${Config.MODES[d.mode].name}`, "", d.mode === "hard" ? "danger" : "")}
+        <p class="note dim" style="margin:0">${MODE_HELP[d.mode]}</p>
         ${btn("shop", `Atelier · ${d.bank} 💎`, "", "big")}
         ${btn("sandbox", "Bac à sable", "", "big")}
         ${btn("controls", `Commandes : ${MODES[Input.mode].label}`)}
@@ -181,11 +195,14 @@ const Menu = (() => {
   function shopScreen() {
     const rows = Object.entries(Upgrades.LIST).map(([key, u]) => {
       const n = Upgrades.level(key), price = Upgrades.cost(key);
-      const pips = u.costs.map((_, i) => `<i class="${i < n ? "on" : ""}"></i>`).join("");
+      const pips = Array.from({ length: u.max }, (_, i) => `<i class="${i < n ? "on" : ""}"></i>`).join("");
+      const hint = Upgrades.locked(key)
+        ? `🔒 mets ${u.hard} 💎 à l'abri en mode difficile (${Save.data.hardBanked}/${u.hard})`
+        : u.hint;
       const action = price === null
         ? `<button type="button" class="small" disabled>max</button>`
         : btn("buy", `${price} 💎`, `data-key="${key}"${Upgrades.affordable(key) ? "" : " disabled"}`, "small");
-      return `<div class="row upgrade"><span><b>${u.name}</b> <em class="pips">${pips}</em><br><small>${u.hint}</small></span>${action}</div>`;
+      return `<div class="row upgrade"><span><b>${u.name}</b> <em class="pips">${pips}</em><br><small>${hint}</small></span>${action}</div>`;
     }).join("");
     const spent = Upgrades.spent();
     return `

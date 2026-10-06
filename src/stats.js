@@ -14,7 +14,7 @@ const Stats = (() => {
   const MIN_COOLDOWN = 0.4;
 
   function compute(run) {
-    const sum = { speed: 0, damage: 0, haste: 0, area: 0, magnet: 0, luck: 0, maxHp: 0, gemMul: 0, weaponDamage: 0, allyMax: 0, calm: 0 };
+    const sum = { speed: 0, damage: 0, haste: 0, area: 0, magnet: 0, luck: 0, maxHp: 0, gemMul: 0, weaponDamage: 0, allyMax: 0, calm: 0, dodge: 0 };
     // Les achats de l'atelier comptent comme des objets portés en permanence.
     for (const [k, v] of Object.entries(Upgrades.mods())) sum[k] += v;
     for (const key of [...run.artifacts, ...run.relics]) {
@@ -34,6 +34,8 @@ const Stats = (() => {
       allyMax: sum.allyMax,
       // Vitesse de montée de la menace.
       threatRate: 1 - sum.calm,
+      // Chance d'éviter un coup (au plus 60 %).
+      dodge: Math.min(0.6, sum.dodge),
     };
   }
 

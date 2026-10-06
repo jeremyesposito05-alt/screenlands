@@ -17,11 +17,36 @@ const Save = (() => {
   // `controls` : "swipe" (glisser) ou "stick" (joystick), voir Input.
   // `upgrades` : le niveau acheté de chaque amélioration de l'atelier.
   // `sound`, `music` : bruitages et musique, réglables dans les menus.
-  const data = { bank: 0, best: 0, controls: "swipe", upgrades: {}, sound: true, music: true };
+  // `mode` : la difficulté choisie (voir Config.MODES) ; `hardBanked` : tout ce
+  // qui a été mis à l'abri en mode difficile, qui ouvre des achats réservés.
+  const data = { bank: 0, best: 0, controls: "swipe", upgrades: {}, sound: true, music: true,
+                 mode: "normal", hardBanked: 0, shopVersion: 2, refundNotice: 0 };
 
+  let saved = null;
   try {
-    Object.assign(data, JSON.parse(localStorage.getItem(KEY)) || {});
+    saved = JSON.parse(localStorage.getItem(KEY));
+    Object.assign(data, saved || {});
   } catch (e) { /* stockage indisponible : on part de zéro */ }
+
+  // L'atelier a changé de prix et de niveaux le 6 octobre 2026 : les achats
+  // de l'ancienne version sont remboursés à leur prix d'alors, une fois, et
+  // le menu le signale.
+  const OLD_PRICES = {
+    swift: [40, 120, 300], might: [50, 150, 400], reflex: [50, 150, 400], pull: [30, 100],
+    vigor: [150, 500], fortune: [120, 400], greed: [80, 250, 700], calm: [100, 300],
+    armed: [150], escort: [300],
+  };
+  if (saved && !saved.shopVersion) {
+    let refund = 0;
+    for (const [key, n] of Object.entries(data.upgrades || {})) {
+      refund += (OLD_PRICES[key] || []).slice(0, n).reduce((a, b) => a + b, 0);
+    }
+    data.bank += refund;
+    data.upgrades = {};
+    data.shopVersion = 2;
+    data.refundNotice = refund;
+    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* idem */ }
+  }
 
   function write() {
     try {
@@ -31,9 +56,18 @@ const Save = (() => {
 
   return {
     data,
-    deposit(amount) {
+    deposit(amount, mode) {
       data.bank += amount;
       data.best = Math.max(data.best, amount);
+      if (mode === "hard") data.hardBanked += amount;
+      write();
+    },
+    clearNotice() {
+      data.refundNotice = 0;
+      write();
+    },
+    setMode(mode) {
+      data.mode = mode;
       write();
     },
     setControls(mode) {

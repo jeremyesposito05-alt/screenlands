@@ -1,6 +1,6 @@
 {
-  "name": "Screenlands",
-  "short_name": "Screenlands",
+  "name": "LabyRun Survivor",
+  "short_name": "LabyRun",
   "description": "Roguelite d'exploration écran par écran, en 2D vue de dessus.",
   "lang": "fr",
   "start_url": "./",

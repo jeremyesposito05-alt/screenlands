@@ -119,6 +119,7 @@ const Render = (() => {
       else drawItemOnGround(d);
     }
     for (const g of state.gems) drawGem(g.x, g.y, g.size);
+    if (state.superGem) drawSuperGem(state.superGem);
     drawDowned(state);
     if (state.hunterComing) drawHunterWarning(state.hunterComing);
 
@@ -521,6 +522,89 @@ const Render = (() => {
     ctx.fill();
   }
 
+  // --- Le rôdeur : un petit fantôme de Pac-Man, en pixels ---
+  // Le corps en deux images (le bas de la robe ondule), contour sombre, et
+  // les yeux par-dessus. Violet en chasse, bleu quand il a peur, et il
+  // clignote en blanc quand la peur va finir.
+  const GHOST_BODY = [
+    "....####....",
+    "..########..",
+    ".##########.",
+    ".##########.",
+    "############",
+    "############",
+    "############",
+    "############",
+    "############",
+    "############",
+  ];
+  const GHOST_SKIRT = [["############", "#.###..###.#"], ["############", ".###.##.###."]];
+  const ghosts = new Map();
+  function ghostImage(color, frame) {
+    const key = `${color}|${frame}`;
+    if (!ghosts.has(key)) {
+      const rows = [...GHOST_BODY, ...GHOST_SKIRT[frame]];
+      const c = document.createElement("canvas");
+      c.width = 14; c.height = 14;
+      const g = c.getContext("2d");
+      const paint = (ox, oy, fill) => {
+        g.fillStyle = fill;
+        rows.forEach((r, y) => [...r].forEach((ch, x) => { if (ch === "#") g.fillRect(x + ox, y + oy, 1, 1); }));
+      };
+      for (const [ox, oy] of [[0, 1], [2, 1], [1, 0], [1, 2]]) paint(ox, oy, "#1d1230");
+      paint(1, 1, color);
+      ghosts.set(key, c);
+    }
+    return ghosts.get(key);
+  }
+
+  function drawGhost(e) {
+    const scared = e.frightened > 0;
+    const blink = scared && e.frightened < 1.5 && Math.floor(clock * 8) % 2 === 0;
+    const color = !scared ? "#a35cf0" : blink ? "#e8ecff" : "#2c56e0";
+    const img = ghostImage(color, Math.floor(clock * 6) % 2);
+    const x = Math.round(e.x - 7), y = Math.round(e.y - 8);
+    ctx.globalAlpha = e.wake > 0 ? 0.45 : 1;
+    ctx.fillStyle = "rgba(30, 20, 50, 0.35)";
+    ctx.beginPath();
+    ctx.ellipse(e.x, e.y + 6, 5, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.drawImage(img, x, y);
+    if (scared) {
+      // Apeuré : deux points pâles et une bouche en zigzag.
+      ctx.fillStyle = blink ? "#c0304a" : "#f4d0d8";
+      ctx.fillRect(x + 4, y + 5, 2, 2);
+      ctx.fillRect(x + 8, y + 5, 2, 2);
+      for (let k = 0; k < 4; k++) ctx.fillRect(x + 3 + k * 2, y + 9 + (k % 2), 2, 1);
+    } else {
+      // En chasse : de grands yeux qui regardent où il va.
+      const lx = e.look.x, ly = e.look.y;
+      for (const ox of [3, 8]) {
+        ctx.fillStyle = "#f4f6fa";
+        ctx.fillRect(x + ox, y + 4, 3, 4);
+        ctx.fillStyle = "#1e3a8a";
+        ctx.fillRect(x + ox + 1 + lx, y + 5 + ly, 2, 2);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // La super-gemme : une grosse gemme qui palpite dans un halo blanc.
+  function drawSuperGem(g) {
+    const pulse = 1 + 0.15 * Math.sin(clock * 6);
+    const halo = ctx.createRadialGradient(g.x, g.y, 0, g.x, g.y, 14 * pulse);
+    halo.addColorStop(0, "rgba(255, 255, 255, 0.55)");
+    halo.addColorStop(1, "rgba(150, 230, 255, 0)");
+    ctx.fillStyle = halo;
+    ctx.fillRect(g.x - 16, g.y - 16, 32, 32);
+    const img = Sprites.get(`gem_${"abc"[Math.floor(clock * 8) % 3]}`);
+    if (img) {
+      ctx.drawImage(img, Math.round(g.x - img.width), Math.round(g.y - img.height), img.width * 2, img.height * 2);
+    } else {
+      drawGem(g.x, g.y, 12);
+    }
+  }
+
   // L'ancienne forme de couleur d'un ennemi, tant qu'il n'a pas d'image.
   function drawEnemyShape(e, x, y, h, flash) {
     ctx.fillStyle = flash ? STYLE.hitFlash : STYLE[e.kind];
@@ -555,6 +639,10 @@ const Render = (() => {
   }
 
   function drawEnemy(e) {
+    if (e.kind === "prowler") {
+      drawGhost(e);
+      return;
+    }
     const h = e.size / 2;
     const x = Math.round(e.x - h), y = Math.round(e.y - h);
     // Endormi à l'entrée de la zone : dessiné terne.

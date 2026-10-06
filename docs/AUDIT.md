@@ -179,3 +179,19 @@ les distingue à la forme et pas seulement à la couleur.
    à acheter, ou on adoucit dès le départ ?
 4. **Le titre** : on garde Screenlands pendant le développement, et on tranche
    avant toute diffusion.
+
+## 6. Décisions de Jeremy (6 octobre 2026)
+
+- **Étages : oui.** L'escalier qui descend est à trouver, celui qui remonte à
+  retrouver. Chaque étage est nettement plus dur. Revenir sur un étage quitté
+  fait réapparaître **tous** ses monstres.
+- **Camps** : le camp de base reste à la surface ; un nouveau camp à partir du
+  troisième étage. Un bonus à débloquer : **un camp portatif**, utilisable une
+  fois où l'on veut (la salle devient sûre, la menace recule).
+- **Hordes : oui**, et surtout **multiplier le ressenti Pac-Man** : des rôdeurs
+  collants qu'on fuit. **Super-gemme** : les rôdeurs deviennent bleus, fuient,
+  et on peut les attraper.
+- **Mort** : trois modes choisis avant chaque expédition — facile (on garde
+  tout, gemmes ×0,5), normal (on garde 25 %, jusqu'à 60 % avec le
+  coffre-fort), difficile (on perd tout, gemmes ×1,5, améliorations réservées).
+- **Titre de travail : LabyRun Survivor.**
