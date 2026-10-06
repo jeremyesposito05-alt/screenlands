@@ -19,7 +19,7 @@ const Sprites = (() => {
     "tree_trunk", "tree_top", "lamp_pole", "lamp_head",
     "enemy_chaser", "enemy_ambusher", "enemy_pincer", "enemy_shy", "enemy_shooter",
     "enemy_bomber", "enemy_swarm", "enemy_brute", "enemy_guardian", "enemy_hunter",
-    "ally_archer", "ally_warrior",
+    ...["sylve", "liane", "braise", "petard", "givre", "orage", "egide", "gloutonne", "ombre", "rosee"].map((k) => `spirit_${k}`),
     "chest_common", "chest_rare", "chest_epic", "chest_legendary",
     "gem_a", "gem_b", "gem_c", "campfire", "portal",
     ...["sword", "spear", "bow", "boomerang", "feather", "whetstone", "gauntlet", "lens", "clover",

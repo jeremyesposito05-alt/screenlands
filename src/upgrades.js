@@ -25,7 +25,8 @@ const Upgrades = (() => {
     vault: { name: "Coffre-fort", hint: "mode normal : +7 % du butin sauvé à la mort", max: 5, base: 100, growth: 1.8, keep: 0.07 },
     cartographer: { name: "Cartographe", hint: "un coffre de plus par carte", max: 3, base: 150, growth: 2.2, chests: 1 },
     armed: { name: "Paquetage", hint: "partir avec une épée", max: 1, base: 150, growth: 1, start: ["weapon", "sword"] },
-    escort: { name: "Escorte", hint: "partir avec un archer, puis un guerrier", max: 2, base: 300, growth: 2, start: ["ally", "archer", "warrior"] },
+    escort: { name: "Escorte", hint: "partir avec Sylve, puis avec Liane", max: 2, base: 300, growth: 2, start: ["ally", "sylve", "liane"] },
+    bond: { name: "Lien spirituel", hint: "une place d'esprit de plus", max: 2, base: 200, growth: 2.2, mods: { allyMax: 1 } },
     abyss: { name: "Lame des profondeurs", hint: "dégâts de l'arme +20 %", max: 3, base: 400, growth: 2, mods: { weaponDamage: 0.2 }, hard: 300 },
   };
 

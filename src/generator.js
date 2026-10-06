@@ -165,6 +165,11 @@ const Generator = (() => {
       c.chest = { tier: Loot.tierFor(c.distance, rng), item: null };
     }
 
+    // 5 bis. Les esprits errants : quelques écrans en abritent un. Lequel, c'est
+    // World qui le tire, parmi ceux qu'on peut rencontrer.
+    const spirits = Config.SPIRITS_PER_MAP + rng.int(Config.SPIRITS_EXTRA + 1);
+    for (const c of rng.shuffle(wild).slice(0, spirits)) c.spirit = true;
+
     // 6. Le Gardien, le mini-boss, dans un des écrans les plus éloignés : le
     //    bout de la carte a toujours quelque chose à défendre.
     const bossCell = rng.pick(wild.filter((c) => c.distance === far));

@@ -15,14 +15,14 @@
 //   monte de niveau quand on en retrouve un (voir Powers) ;
 // - `relic` : un objet légendaire unique, à l'effet spécial ;
 // - `consumable` : pris et consommé aussitôt ;
-// - `ally` : un compagnon qui rejoint la file derrière le joueur, attaque
-//   seul, et tombe à sa place quand il est touché (voir Allies).
+// (Les compagnons ne sont plus des objets : ce sont des esprits qu'on
+// rencontre dans le labyrinthe, voir Allies.)
 //
 // Les effets sur les caractéristiques sont décrits par `mods`, que Stats
 // additionne : speed et damage en fraction (+0,1 = +10 %), haste pour la
 // cadence, area pour la portée, magnet en pixels, luck en points, maxHp en
 // cœurs, gemMul pour la valeur des gemmes, weaponDamage pour les seuls
-// dégâts de l'arme, allyMax pour la longueur de la file de compagnons.
+// dégâts de l'arme, allyMax pour les places de plus dans la file des esprits.
 
 const ITEMS = {
   // --- Armes ---
@@ -85,18 +85,14 @@ const ITEMS = {
   frost: { name: "Onde de givre", hint: "ralentit tout autour de toi", type: "power" },
   aegis: { name: "Égide", hint: "absorbe un coup, puis se recharge", type: "power" },
 
-  // --- Compagnons (coffres rares), réglés dans Allies ---
-  archer: { name: "Archer", hint: "te suit et tire sur l'ennemi proche", type: "ally" },
-  warrior: { name: "Guerrier", hint: "te suit et frappe ce qui approche", type: "ally" },
-
   // --- Reliques (coffres légendaires), uniques ---
   phoenix: { name: "Cœur de phénix", hint: "tu reviendras une fois de la mort", type: "relic" },
   hourglass: { name: "Sablier", hint: "menace −2 min, puis figée 1 min", type: "relic" },
   crown: { name: "Couronne d'avarice", hint: "toutes les gemmes valent double", type: "relic", mods: { gemMul: 1 } },
-  // Deux compagnons tout de suite, et deux places de plus dans la file.
-  banner: { name: "Étendard du roi", hint: "2 compagnons, file de 6", type: "relic", mods: { allyMax: 2 } },
+  // Deux places de plus dans la file des esprits.
+  banner: { name: "Étendard du roi", hint: "2 places d'esprit de plus", type: "relic", mods: { allyMax: 2 } },
   // L'arme en main frappe deux fois plus fort (pas les pouvoirs ni les
-  // compagnons : c'est la relique de ceux qui jouent au contact).
+  // esprits : c'est la relique de ceux qui jouent au contact).
   runeBlade: { name: "Lame runique", hint: "dégâts de l'arme ×2", type: "relic", mods: { weaponDamage: 1 } },
 };
 
@@ -115,7 +111,6 @@ const LOOT = {
   commons: ["feather", "whetstone", "gauntlet", "lens", "clover", "magnet", "flask"],
   rareArtifacts: ["heart", "boots", "lantern"],
   powers: ["fireTrail", "orb", "lightning", "frost", "aegis"],
-  allies: ["archer", "warrior"],
   relics: ["phoenix", "hourglass", "crown", "banner", "runeBlade"],
   weapons: ["sword", "spear", "bow", "boomerang"],
 

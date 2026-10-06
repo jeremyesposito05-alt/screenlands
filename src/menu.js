@@ -244,9 +244,10 @@ const Menu = (() => {
       </div>`).join("");
     const boosts = [...keysOf("boost"), ...keysOf("consumable")].map((k) =>
       btn("give", `${ITEMS[k].name}${count(k) ? ` ×${count(k)}` : ""}`, `data-key="${k}"`, count(k) ? "on" : "")).join("");
-    const allies = keysOf("ally").map((k) => {
-      const n = r.allies.filter((a) => a.type === k).length;
-      return btn("ally", `${ITEMS[k].name}${n ? ` ×${n}` : ""}`, `data-key="${k}"`, n ? "on" : "");
+    // Un appui : l'esprit rejoint la file, puis monte d'un niveau.
+    const allies = Allies.POOL.map((k) => {
+      const a = r.allies.find((x) => x.type === k);
+      return btn("ally", `${Allies.TYPES[k].name}${a ? ` niv. ${a.level}` : ""}`, `data-key="${k}"`, a ? "on" : "");
     }).join("");
     const relics = keysOf("relic").map((k) =>
       btn("relic", ITEMS[k].name, `data-key="${k}"`, r.relics.includes(k) ? "on" : "")).join("");
@@ -271,9 +272,9 @@ const Menu = (() => {
       <section><h3>Pouvoirs</h3>${powers}</section>
       <section><h3>Bonus et artefacts</h3><div class="grid">${boosts}</div></section>
       <section><h3>Reliques</h3><div class="grid">${relics}</div></section>
-      <section><h3>Compagnons (${r.allies.length}/${Allies.maxFor(r)})</h3><div class="grid">${allies}
+      <section><h3>Esprits (${r.allies.length}/${Allies.maxFor(r)})</h3><div class="grid">${allies}
         ${btn("clearAllies", "Renvoyer")}
-      </div><p class="note dim">Un coup reçu fait tomber le dernier de la file au lieu d'un cœur ; repasse dessus pour le relever.</p></section>
+      </div><p class="note dim">Un coup reçu fait tomber le dernier esprit de la file au lieu d'un cœur ; repasse dessus pour le relever.</p></section>
       <section><h3>Ennemis</h3><div class="grid">
         ${btn("elite", `Élite : ${eliteSpawn ? "oui" : "non"}`, "", eliteSpawn ? "on" : "")}
         ${enemies}

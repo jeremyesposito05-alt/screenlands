@@ -112,16 +112,16 @@ graphismes.
   rebondit au niveau 3), **Onde de givre** (ralentit, puis blesse),
   **Égide** (absorbe un coup, puis se recharge). Ils s'affichent en bas avec
   leur niveau.
-- **Des compagnons** (prototype), à la manière des options des jeux d'avion :
-  l'**Archer** tire sur l'ennemi le plus proche, le **Guerrier** frappe ce
-  qui approche. Jusqu'à quatre (six avec l'Étendard du roi) suivent le joueur
-  en file, sur sa trajectoire exacte, comme un serpent. Ils font mal, mais
-  moins que le joueur. On les trouve dans les coffres rares.
-
-  Ils servent aussi d'armure : **un coup reçu fait tomber le dernier de la
-  file au lieu de coûter un cœur**. Le compagnon tombé reste sonné quatre
-  secondes ; repasser dessus le relève, sinon il est perdu. Armes, pouvoirs
-  et reliques, eux, ne se perdent jamais sur un coup.
+- **Des esprits compagnons.** Quelques salles de chaque carte abritent un
+  esprit errant, qui flotte dans un halo de sa couleur. Le toucher le fait
+  entrer dans la file qui suit le joueur ; une bulle dit qui il est, sans
+  arrêter le jeu. Le retrouver le fait monter d'un niveau ; au niveau 3, il
+  évolue. Sylve tire des flèches (3 en éventail, puis qui traversent), Liane
+  fouette devant (puis derrière, puis ramène les gemmes), Braise lance des
+  boules de feu qui poursuivent (puis explosent, puis par trois). Chacun
+  éclaire de sa couleur. Places : 4 en facile, 3 en normal, 2 en difficile,
+  plus l'Étendard du roi et le Lien spirituel de l'atelier. Sept autres
+  esprits sont dessinés et attendent leur pouvoir (`src/allies.js`).
 - **Trois cœurs**, qui ne comptent que quand il n'y a plus de compagnon. On
   garde son équipement tant qu'on est en vie. Mourir fait perdre le butin
   porté et tout l'équipement, et ramène au camp de base sur une nouvelle

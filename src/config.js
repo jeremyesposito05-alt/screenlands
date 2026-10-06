@@ -78,11 +78,12 @@ const Config = Object.freeze({
   // 4 000 gemmes et vidait l'atelier d'un coup.)
   GEM_BASE: 1,
   // Les modes de difficulté, choisis avant chaque expédition : ce que vaut
-  // une gemme, et la part du butin porté sauvée à la mort.
+  // une gemme, la part du butin porté sauvée à la mort, et le nombre de
+  // places dans la file des esprits.
   MODES: {
-    easy: { name: "facile", gems: 0.5, keep: 1 },
-    normal: { name: "normal", gems: 1, keep: 0.25 },
-    hard: { name: "difficile", gems: 1.5, keep: 0 },
+    easy: { name: "facile", gems: 0.5, keep: 1, spirits: 4 },
+    normal: { name: "normal", gems: 1, keep: 0.25, spirits: 3 },
+    hard: { name: "difficile", gems: 1.5, keep: 0, spirits: 2 },
   },
   GEM_SIZE: 8,
   // À quelle distance du feu de camp le butin est mis à l'abri.
@@ -125,6 +126,9 @@ const Config = Object.freeze({
   FLOOR_GEM_BONUS: 1,
   CAMP_FLOOR: 3,
   STAIRS_RADIUS: 10,
+  // Esprits errants par carte (au moins, et de plus au hasard).
+  SPIRITS_PER_MAP: 3,
+  SPIRITS_EXTRA: 2,
   // Un point de vie de plus tous les ENEMY_HP_EVERY écrans de distance.
   ENEMY_HP_EVERY: 3,
   // Touché, un ennemi est repoussé et reste étourdi, donc inoffensif, un

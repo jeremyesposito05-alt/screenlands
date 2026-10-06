@@ -23,6 +23,16 @@ const RECIPES = [
              area: [xs[frame] + 6, ys[row] + 6, xs[frame + 1] - 6, ys[row + 1] - (frame === 0 ? 30 : 6)] };
   })),
 
+  // Les esprits compagnons : 10 rangées de 3 images de flottement, sur fond
+  // vert dans un cadre sombre. Les étincelles relient parfois deux rangées :
+  // leurs limites sont fixées à la main, et on garde la plus grande forme.
+  ...["sylve", "liane", "braise", "petard", "givre", "orage", "egide", "gloutonne", "ombre", "rosee"]
+    .flatMap((name, row) => [0, 1, 2].map((frame) => {
+      const xs = [80, 330, 600, 860], ys = [44, 200, 363, 508, 656, 806, 951, 1108, 1253, 1464, 1620];
+      return { src: "spirits_sheet.webp", pick: "largest", frame, w: 14, h: 14, out: `spirit_${name}`, colors: 16,
+               bgAt: [[60, 60]], area: [xs[frame], ys[row], xs[frame + 1], ys[row + 1]] };
+    })),
+
   // Le sol de la forêt : deux textures qui se répètent.
   { src: "ground_sheet.webp", pick: 0, w: 48, h: 48, out: "ground_grass", fill: true, colors: 12 },
   { src: "ground_sheet.webp", pick: 1, w: 48, h: 48, out: "ground_dirt", fill: true, colors: 12 },
@@ -71,10 +81,6 @@ const RECIPES = [
   { src: "enemies_b_sheet.webp", pick: 3, w: 22, h: 20, out: "enemy_brute" },
   { src: "bosses_sheet.webp", pick: 0, w: 28, h: 30, out: "enemy_guardian" },
   { src: "bosses_sheet.webp", pick: 1, w: 20, h: 22, out: "enemy_hunter" },
-
-  // Les compagnons, un peu plus petits que le héros.
-  { src: "allies_sheet.webp", pick: 0, w: 16, h: 22, out: "ally_archer" },
-  { src: "allies_sheet.webp", pick: 1, w: 16, h: 22, out: "ally_warrior" },
 
   // Coffres fermés, gemme en trois reflets, feu de camp et portail.
   { src: "chest_sheet.webp", pick: 0, w: 16, h: 14, out: "chest_common" },

@@ -143,6 +143,11 @@ const World = (() => {
     // encore dessus (il vient d'arriver par là) ?
     stairs: [],
     atStairs: false,
+    // L'esprit errant de la zone, {type, key, x, y, size} ou null, et la bulle
+    // qu'un esprit dit en rejoignant la file : {title, text, follow, x, y,
+    // time, color}. Le jeu ne s'arrête pas pour elle.
+    wildSpirit: null,
+    bubble: null,
     // Mode test (voir sandbox) : banque intacte ; `god` rend invincible.
     sandbox: false,
     god: false,
@@ -321,6 +326,17 @@ const World = (() => {
       : null;
     if (!state.run.drops.has(key)) state.run.drops.set(key, []);
     state.drops = state.run.drops.get(key);
+
+    // Un esprit errant attend ici, tant qu'on ne l'a pas pris. Lequel : tiré
+    // avec la graine de l'écran, parmi ceux qu'on peut rencontrer.
+    const spiritKey = `spirit:${cx},${cy}`;
+    state.wildSpirit = null;
+    if (ZoneRegistry.spirit(cx, cy) && !state.run.taken.has(spiritKey) && !zone.safe && !campHere) {
+      const pool = Allies.POOL;
+      const at = zone.gems[zone.gems.length - 1] || zone.fire;
+      state.wildSpirit = { type: pool[deriveSeed(ZoneRegistry.seed, cx, cy, 77) % pool.length], key: spiritKey,
+                           x: at.x, y: at.y, size: 12 };
+    }
 
     spawnEnemies(cx, cy, zone, distance, campHere);
 
@@ -639,6 +655,7 @@ const World = (() => {
       return false;
     });
     takeSuperGem(dt);
+    meetSpirit();
     openChest();
     pickUpDrops();
     restAtFire();
@@ -667,6 +684,27 @@ const World = (() => {
     if (state.phase === "dead") return;
 
     changeZoneIfNeeded();
+  }
+
+  // Un esprit errant touché rejoint la file (ou y monte d'un niveau) et dit
+  // qui il est dans une bulle. File pleine : il le dit, et attend qu'on
+  // revienne.
+  function meetSpirit() {
+    const s = state.wildSpirit;
+    if (!s) return;
+    if (!Physics.overlapsBody(state.player, s)) { s.waiting = false; return; }
+    if (s.waiting) return;
+    const t = Allies.TYPES[s.type];
+    const said = Allies.meet(state, s.type);
+    if (!said) {
+      s.waiting = true;
+      state.bubble = { title: t.name, text: "Ta file est pleine… reviens me chercher.", x: s.x, y: s.y, time: 2.2, color: t.color };
+      return;
+    }
+    state.run.taken.add(s.key);
+    state.wildSpirit = null;
+    state.bubble = { title: said[0], text: said[1], follow: s.type, x: s.x, y: s.y, time: 2.8, color: t.color };
+    emit("revive", s);
   }
 
   // La super-gemme : les rôdeurs deviennent bleus et fuient pendant
@@ -850,21 +888,9 @@ const World = (() => {
             state.hunterComing = null;
           }
         }
-        // L'Étendard rallie tout de suite un Archer et un Guerrier.
-        if (key === "banner") {
-          Allies.add(state, "archer");
-          Allies.add(state, "warrior");
-        }
         break;
       case "consumable":
         if (key === "flask") p.hp = Math.min(p.maxHp, p.hp + 1);
-        break;
-      case "ally":
-        // File pleine : le compagnon repart, mais soigne en passant.
-        if (!Allies.add(state, key)) {
-          p.hp = Math.min(p.maxHp, p.hp + 1);
-          title = `${item.name} : file complète`;
-        }
         break;
       default:
         r.artifacts.push(key);
@@ -1066,6 +1092,7 @@ const World = (() => {
   }
 
   function tickMessages(dt) {
+    if (state.bubble && (state.bubble.time -= dt) <= 0) state.bubble = null;
     if (state.banner) {
       state.banner.time -= dt;
       if (state.banner.time <= 0) state.banner = null;
@@ -1109,7 +1136,7 @@ const World = (() => {
       r.allies = [];
       recomputeStats();
     },
-    addAlly(type) { Allies.add(state, type); },
+    addAlly(type) { Allies.meet(state, type); },
     clearAllies() { state.run.allies = []; state.downed = []; },
     heal() { state.player.hp = state.player.maxHp; },
     // Un ennemi au point d'apparition le plus éloigné du joueur, réveillé

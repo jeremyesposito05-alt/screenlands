@@ -131,7 +131,8 @@ const Render = (() => {
     // Les personnages, rangés par la hauteur de leurs pieds.
     const actors = state.enemies.map((e) => ({ y: e.y + e.size / 2, draw: () => drawEnemy(e) }));
     if (state.hunter) actors.push({ y: state.hunter.y + 7, draw: () => drawHunter(state.hunter) });
-    for (const a of state.run.allies) actors.push({ y: a.y + 4, draw: () => drawAlly(a.type, a.x, a.y) });
+    for (const a of state.run.allies) actors.push({ y: a.y + 4, draw: () => drawAlly(a.type, a.x, a.y, 1, a.level) });
+    if (state.wildSpirit) actors.push({ y: state.wildSpirit.y + 4, draw: () => drawWildSpirit(state.wildSpirit) });
     if (state.phase !== "dead") actors.push({ y: player.y + player.size / 2, draw: () => drawPlayer(player, dt) });
     actors.sort((a, b) => a.y - b.y);
     for (const a of actors) a.draw();
@@ -147,6 +148,7 @@ const Render = (() => {
       drawLighting(state, dress);
     }
 
+    drawBubble(state);
     ctx.restore();
     // Touché : un voile rouge qui s'efface.
     if (hurtFlash > 0) {
@@ -418,6 +420,10 @@ const Render = (() => {
     }
     if (state.fire) lights.push({ x: state.fire.x, y: state.fire.y, r: 72 * flicker, warm: true });
     if (state.portal) lights.push({ x: state.portal.x, y: state.portal.y, r: 46, warm: false });
+    // Chaque esprit éclaire de sa couleur.
+    for (const a of [...state.run.allies, ...(state.wildSpirit ? [state.wildSpirit] : [])]) {
+      lights.push({ x: a.x, y: a.y - 9, r: 22, color: spiritColor(a.type) });
+    }
 
     l.globalCompositeOperation = "destination-out";
     for (const s of lights) {
@@ -433,10 +439,10 @@ const Render = (() => {
 
     ctx.globalCompositeOperation = "lighter";
     for (const s of lights) {
-      if (!s.warm) continue;
+      if (!s.warm && !s.color) continue;
       const gr = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 0.6);
-      gr.addColorStop(0, "rgba(255, 170, 80, 0.22)");
-      gr.addColorStop(1, "rgba(255, 170, 80, 0)");
+      gr.addColorStop(0, s.color ? s.color + "44" : "rgba(255, 170, 80, 0.22)");
+      gr.addColorStop(1, s.color ? s.color + "00" : "rgba(255, 170, 80, 0)");
       ctx.fillStyle = gr;
       ctx.fillRect(s.x - s.r, s.y - s.r, s.r * 2, s.r * 2);
     }
@@ -748,54 +754,137 @@ const Render = (() => {
     ctx.globalAlpha = 1;
   }
 
-  // Les compagnons : un petit personnage de la couleur du joueur, avec ce
-  // qu'il tient. Ceux qui sont à terre clignotent, cerclés du temps qui leur
-  // reste pour être relevés. Puis leurs flèches et leurs coups.
-  const ALLY_COLORS = { archer: "#7fd0ff", warrior: "#d9dde6" };
-  function drawAlly(type, x, y, alpha = 1) {
+  // Les esprits : petits, flottants, chacun de sa couleur. Ils ondulent
+  // au-dessus du sol (leur ombre reste en bas), cyclent leurs 3 images, et
+  // brillent de leur couleur (voir drawLighting). Ceux qui sont à terre
+  // clignotent, cerclés du temps qui leur reste pour être relevés. Puis leurs
+  // flèches, leurs coups de fouet et leurs boules de feu.
+  const spiritColor = (type) => (Allies.TYPES[type] || {}).color || "#ffffff";
+  function drawAlly(type, x, y, alpha = 1, level = 1) {
+    const name = `spirit_${type}`;
+    const img = Sprites.get(name);
+    const lift = 9 + Math.sin(clock * 3 + x * 0.1) * 2;
+    ctx.globalAlpha = alpha * 0.3;
+    ctx.fillStyle = "rgb(30, 20, 50)";
+    ctx.beginPath();
+    ctx.ellipse(x, y + 4, 4, 1.2, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.globalAlpha = alpha;
-    if (Sprites.get(`ally_${type}`)) {
-      const bob = Math.floor(clock * 8 + x * 0.2) % 2 ? 1 : 0;
-      drawCharacter(`ally_${type}`, x, y + 4, false, false, bob);
-      ctx.globalAlpha = 1;
-      return;
+    if (img) {
+      const fa = img.height, fw = fa / A, frame = Math.floor(clock * 6 + x * 0.05) % Math.max(1, Math.round(img.width / fa));
+      // Évolué (niveau 3) : un peu plus grand.
+      const k = level >= 3 ? 1.25 : 1;
+      ctx.drawImage(img, frame * fa, 0, fa, fa, Math.round(x - (fw * k) / 2), Math.round(y - lift - (fw * k) / 2), fw * k, fw * k);
+    } else {
+      ctx.fillStyle = spiritColor(type);
+      ctx.beginPath();
+      ctx.arc(x, y - lift, 4, 0, Math.PI * 2);
+      ctx.fill();
     }
-    ctx.fillStyle = STYLE.player;
-    ctx.fillRect(x - 4, y - 4, 8, 8);
-    ctx.fillStyle = ALLY_COLORS[type];
-    ctx.fillRect(x - 4, y - 4, 8, 3);
+    // Le niveau, en petites étoiles sous l'esprit.
+    if (level > 1) {
+      ctx.fillStyle = "#ffe9a8";
+      for (let i = 0; i < level - 1; i++) ctx.fillRect(x - (level - 1) + i * 2, y - lift + 7, 1, 1);
+    }
     ctx.globalAlpha = 1;
   }
 
-  // Les compagnons à terre, au sol sous les autres personnages.
+  // Les esprits à terre, au sol sous les autres personnages.
   function drawDowned(state) {
     for (const d of state.downed || []) {
-      if (Math.floor(clock * 8) % 2 === 0) drawAlly(d.type, d.x, d.y, 0.6);
-      ctx.strokeStyle = "rgba(242, 196, 77, 0.8)";
+      if (Math.floor(clock * 8) % 2 === 0) drawAlly(d.type, d.x, d.y, 0.55, d.level);
+      ctx.strokeStyle = spiritColor(d.type);
+      ctx.globalAlpha = 0.8;
       ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.arc(d.x, d.y, 8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (d.time / Allies.DOWN_TIME));
+      ctx.arc(d.x, d.y - 4, 8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (d.time / Allies.DOWN_TIME));
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
+  }
+
+  // L'esprit errant : il flotte en attendant qu'on le touche, dans un cercle
+  // de lumière qui palpite, pour qu'on le repère de loin.
+  function drawWildSpirit(s) {
+    const pulse = 0.5 + 0.5 * Math.sin(clock * 4);
+    const halo = ctx.createRadialGradient(s.x, s.y - 6, 0, s.x, s.y - 6, 18);
+    halo.addColorStop(0, spiritColor(s.type) + "88");
+    halo.addColorStop(1, spiritColor(s.type) + "00");
+    ctx.globalAlpha = 0.5 + 0.5 * pulse;
+    ctx.fillStyle = halo;
+    ctx.fillRect(s.x - 18, s.y - 24, 36, 36);
+    ctx.globalAlpha = 1;
+    drawAlly(s.type, s.x, s.y);
+  }
+
+  // La bulle d'un esprit qui rejoint la file : au-dessus de lui, elle le suit
+  // et s'efface toute seule. Le texte passe à la ligne pour tenir dans la
+  // largeur de l'écran.
+  function drawBubble(state) {
+    const b = state.bubble;
+    if (!b) return;
+    const a = b.follow && state.run.allies.find((x) => x.type === b.follow);
+    const ax = a ? a.x : b.x, ay = (a ? a.y : b.y) - 20;
+    const W = Config.ZONE_W, maxW = Math.min(150, W - 24);
+    ctx.font = "6px monospace";
+    const words = b.text.split(" "), lines = [];
+    let line = "";
+    for (const w of words) {
+      const next = line ? `${line} ${w}` : w;
+      if (ctx.measureText(next).width > maxW - 8 && line) { lines.push(line); line = w; } else line = next;
+    }
+    if (line) lines.push(line);
+    const bw = Math.min(maxW, Math.max(ctx.measureText(b.title).width * 1.3, ...lines.map((l) => ctx.measureText(l).width)) + 10);
+    const bh = 12 + lines.length * 7;
+    const x = Math.round(Math.min(Math.max(ax - bw / 2, 8), W - 8 - bw)), y = Math.round(Math.max(ay - bh, 20));
+    ctx.globalAlpha = Math.min(1, b.time * 3);
+    ctx.fillStyle = "rgba(14, 12, 26, 0.88)";
+    ctx.fillRect(x, y, bw, bh);
+    ctx.fillStyle = b.color;
+    ctx.fillRect(x, y, bw, 1);
+    ctx.fillRect(x, y + bh - 1, bw, 1);
+    ctx.fillRect(Math.round(Math.min(Math.max(ax, x + 4), x + bw - 4)) - 1, y + bh, 3, 2);
+    text(b.title, x + 5, y + 2, b.color, "left", 7);
+    lines.forEach((l, i) => text(l, x + 5, y + 10 + i * 7, "#e8e4f2", "left", 6));
+    ctx.globalAlpha = 1;
   }
 
   function drawAllyAttacks(state) {
     for (const s of state.allyShots || []) {
       const d = Math.hypot(s.vx, s.vy) || 1;
-      ctx.strokeStyle = ALLY_COLORS.archer;
+      ctx.strokeStyle = s.pierce ? "#e9ffc8" : spiritColor("sylve");
       ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.moveTo(s.x - (s.vx / d) * 4, s.y - (s.vy / d) * 4);
       ctx.lineTo(s.x + (s.vx / d) * 2, s.y + (s.vy / d) * 2);
       ctx.stroke();
     }
-    for (const s of state.slashes || []) {
-      ctx.strokeStyle = `rgba(232, 237, 245, ${s.life / 0.14})`;
+    // Le fouet : une liane qui ondule de l'esprit jusqu'au bout du coup.
+    for (const w of state.whips || []) {
+      ctx.strokeStyle = w.color;
+      ctx.globalAlpha = Math.min(1, w.life / 0.1);
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(s.x, s.y);
-      ctx.lineTo(s.tx, s.ty);
+      const n = 8;
+      for (let i = 0; i <= n; i++) {
+        const t = i / n, wave = Math.sin(t * Math.PI * 3 + clock * 30) * 3 * (1 - t);
+        const x = w.x + (w.tx - w.x) * t, y = w.y - 8 + (w.ty - w.y + 8) * t + wave;
+        if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+      }
       ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    // Les boules de feu : un cœur clair dans une flamme qui palpite.
+    for (const f of state.fireballs || []) {
+      const r = 3 + Math.sin(clock * 20 + f.x) * 0.6;
+      ctx.fillStyle = "rgba(255, 120, 40, 0.45)";
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, r + 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffd27a";
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, r * 0.6, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
@@ -1387,11 +1476,11 @@ const Render = (() => {
       ctx.fillStyle = i < p.hp ? STYLE.heart : STYLE.heartEmpty;
       ctx.fillRect(4 + i * step, 4 + (7 - size) / 2, size, size);
     }
-    // Les compagnons comptent comme des cœurs de plus : ils s'affichent juste
-    // après, puis vient l'arme.
+    // Les esprits comptent comme des cœurs de plus : ils s'affichent juste
+    // après, chacun de sa couleur, puis vient l'arme.
     let hx = 4 + p.maxHp * step;
     for (const a of state.run.allies) {
-      ctx.fillStyle = ALLY_COLORS[a.type];
+      ctx.fillStyle = spiritColor(a.type);
       ctx.fillRect(hx + 1, 4 + (7 - size) / 2, size - 1, size);
       hx += step - 1;
     }
