@@ -28,7 +28,7 @@ const Sprites = (() => {
   ];
   // Les images animées sont des bandes d'images côte à côte : la largeur
   // d'une image. Les autres n'en ont qu'une.
-  const FRAME_W = { hero_front: 20, hero_side: 20, hero_back: 20 };
+  const FRAME_W = { hero_front: 40, hero_side: 40, hero_back: 40 };
   const images = {};
   // Augmente à chaque image arrivée : le rendu s'en sert pour savoir que ce
   // qu'il a mis en cache est à refaire.
@@ -37,7 +37,14 @@ const Sprites = (() => {
   function load() {
     for (const name of NAMES) {
       const img = new Image();
-      img.onload = () => { images[name] = img; version++; };
+      img.onload = () => {
+        // La taille à l'écran, en unités de zone : Config.ART pixels de dessin
+        // par unité.
+        img.w = img.width / Config.ART;
+        img.h = img.height / Config.ART;
+        images[name] = img;
+        version++;
+      };
       img.src = `assets/sprites/${name}.png`;
     }
   }
@@ -54,6 +61,7 @@ const Sprites = (() => {
       x.globalCompositeOperation = "source-in";
       x.fillStyle = "#ffffff";
       x.fillRect(0, 0, c.width, c.height);
+      c.w = img.w; c.h = img.h;
       whites[name] = c;
     }
     return whites[name] || null;
@@ -84,6 +92,7 @@ const Sprites = (() => {
           }
         }
       }
+      c.w = c.width / Config.ART; c.h = c.height / Config.ART;
       outlines[key] = c;
     }
     return outlines[key] || null;

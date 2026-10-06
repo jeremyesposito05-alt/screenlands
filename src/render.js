@@ -62,6 +62,10 @@ const Render = (() => {
   // pixels de zone, mais le texte de l'interface reste net sur un téléphone.
   // Pour du vrai pixel art, il suffira de repasser à 1.
   const RES = 4;
+  // Finesse des images : A pixels de dessin pour une unité de zone. Les
+  // positions et les tailles du jeu restent en unités ; seules les images
+  // portent plus de détails (voir Sprites).
+  const A = Config.ART;
 
   function init(canvas) {
     canvas.width = Config.ZONE_W * RES;
@@ -98,7 +102,7 @@ const Render = (() => {
     if (amp) ctx.translate(Math.round((Math.random() - 0.5) * 2 * amp), Math.round((Math.random() - 0.5) * 2 * amp));
 
     if (art) {
-      ctx.drawImage(groundLayer(state, dress), 0, 0);
+      ctx.drawImage(groundLayer(state, dress), 0, 0, Config.ZONE_W, Config.ZONE_H);
     } else {
       ctx.fillStyle = zone.ground;
       ctx.fillRect(0, 0, Config.ZONE_W, Config.ZONE_H);
@@ -174,14 +178,14 @@ const Render = (() => {
     ctx.globalAlpha = alpha * 0.35;
     ctx.fillStyle = "rgb(30, 20, 50)";
     ctx.beginPath();
-    ctx.ellipse(cx, feet, img.width * 0.35, 1.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, feet, img.w * 0.35, 1.5, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = alpha;
-    const x = Math.round(cx - img.width / 2), y = Math.round(feet - img.height + 1 - bob);
+    const x = Math.round(cx - img.w / 2), y = Math.round(feet - img.h + 1 - bob);
     const ring = rim && Sprites.outline(name, 0, rim[0]);
     if (ring) {
       ctx.globalAlpha = alpha * rim[1];
-      drawSprite(ring, x - 1, y - 1, flip);
+      drawSprite(ring, x - 1 / A, y - 1 / A, flip);
       ctx.globalAlpha = alpha;
     }
     drawSprite(img, x, y, flip);
@@ -189,11 +193,11 @@ const Render = (() => {
 
   // Une image, éventuellement retournée de gauche à droite.
   function drawSprite(img, x, y, flip = false, c = ctx) {
-    if (!flip) { c.drawImage(img, x, y); return; }
+    if (!flip) { c.drawImage(img, x, y, img.w, img.h); return; }
     c.save();
-    c.translate(x + img.width, y);
+    c.translate(x + img.w, y);
     c.scale(-1, 1);
-    c.drawImage(img, 0, 0);
+    c.drawImage(img, 0, 0, img.w, img.h);
     c.restore();
   }
 
@@ -209,8 +213,11 @@ const Render = (() => {
     groundKey = key;
     const W = Config.ZONE_W, H = Config.ZONE_H, t = Config.WALL;
     if (!groundCanvas) groundCanvas = document.createElement("canvas");
-    groundCanvas.width = W; groundCanvas.height = H;
+    // Le cache est à la finesse des images (A pixels de dessin par unité),
+    // pour ne rien perdre de leurs détails ; on y dessine en unités de zone.
+    groundCanvas.width = W * A; groundCanvas.height = H * A;
     const g = groundCanvas.getContext("2d");
+    g.setTransform(A, 0, 0, A, 0, 0);
     g.imageSmoothingEnabled = false;
     const S = Sprites.get;
 
@@ -223,12 +230,12 @@ const Render = (() => {
     const P = 12;
     for (let y = 0; y < H; y += P) {
       for (let x = 0; x < W; x += P) {
-        const sx = rng.int(tile.width - P + 1), sy = rng.int(tile.height - P + 1);
+        const sx = rng.int(tile.w - P + 1), sy = rng.int(tile.h - P + 1);
         const fx = rng.chance(0.5), fy = rng.chance(0.5);
         g.save();
         g.translate(x + (fx ? P : 0), y + (fy ? P : 0));
         g.scale(fx ? -1 : 1, fy ? -1 : 1);
-        g.drawImage(tile, sx, sy, P, P, 0, 0, P, P);
+        g.drawImage(tile, sx * A, sy * A, P * A, P * A, 0, 0, P, P);
         g.restore();
       }
     }
@@ -252,7 +259,7 @@ const Render = (() => {
         g.beginPath();
         g.ellipse(s.x + s.w / 2, s.y + s.h - 1, s.w / 2, s.h / 6, 0, 0, Math.PI * 2);
         g.fill();
-        if (img) g.drawImage(img, Math.round(s.x + (s.w - img.width) / 2), s.y + s.h - img.height);
+        if (img) g.drawImage(img, Math.round(s.x + (s.w - img.w) / 2), s.y + s.h - img.h, img.w, img.h);
       } else {
         hedgeRun(g, s, true);
       }
@@ -269,18 +276,18 @@ const Render = (() => {
       const cy = doorCenter(side, exits[side]).y;
       const x = side === "left" ? 0 : W - t;
       const a = S("door_pillar_a"), b = S("door_pillar_b");
-      if (a) g.drawImage(a, x + (t - a.width) / 2, cy - half - a.height + 4);
-      if (b) g.drawImage(b, x + (t - b.width) / 2, cy + half - 4);
+      if (a) g.drawImage(a, x + (t - a.w) / 2, cy - half - a.h + 4, a.w, a.h);
+      if (b) g.drawImage(b, x + (t - b.w) / 2, cy + half - 4, b.w, b.h);
     }
     for (const side of ["up", "down"]) {
       if (!exits[side]) continue;
       const cx = doorCenter(side, exits[side]).x;
       const l = S("door_left"), r = S("door_right");
-      const y = side === "up" ? t - (l ? l.height : 0) : H - (l ? l.height : 0);
+      const y = side === "up" ? t - (l ? l.h : 0) : H - (l ? l.h : 0);
       // Les piliers de ces images sont aux 85 % (gauche) et 17 % (droite) de
       // leur largeur : on les cale sur les bords du passage.
-      if (l) g.drawImage(l, Math.round(cx - half - l.width * 0.85), y);
-      if (r) g.drawImage(r, Math.round(cx + half - r.width * 0.17), y);
+      if (l) g.drawImage(l, Math.round(cx - half - l.w * 0.85), y, l.w, l.h);
+      if (r) g.drawImage(r, Math.round(cx + half - r.w * 0.17), y, r.w, r.h);
     }
 
     // Les pieds des arbres et des lampadaires, plantés dans les murs.
@@ -320,12 +327,12 @@ const Render = (() => {
     else g.rect(s.x - 3, s.y, s.w + 6, s.h);
     g.clip();
     if (horizontal) {
-      const rows = inner ? [s.y - 2, s.y + s.h - img.height] : [s.y + s.h - img.height + (s.y === 0 ? 1 : 0)];
+      const rows = inner ? [s.y - 2, s.y + s.h - img.h] : [s.y + s.h - img.h + (s.y === 0 ? 1 : 0)];
       for (const y of rows) {
-        for (let x = s.x - 6; x < s.x + s.w; x += img.width - 6) g.drawImage(img, x, y);
+        for (let x = s.x - 6; x < s.x + s.w; x += img.w - 6) g.drawImage(img, x, y, img.w, img.h);
       }
     } else {
-      for (let y = s.y - 6; y < s.y + s.h; y += img.height - 6) g.drawImage(img, s.x + (s.w - img.width) / 2, y);
+      for (let y = s.y - 6; y < s.y + s.h; y += img.h - 6) g.drawImage(img, s.x + (s.w - img.w) / 2, y, img.w, img.h);
     }
     g.restore();
   }
@@ -341,19 +348,19 @@ const Render = (() => {
       const trunk = S("tree_trunk"), top = S("tree_top");
       if (!trunk || !top) return {};
       return {
-        base: { img: trunk, x: Math.round(wallX - trunk.width / 2), y: prop.y - trunk.height, flip: inward < 0 },
-        top: { img: top, x: Math.round(wallX + inward * 14 - top.width / 2), y: prop.y - trunk.height + 8 - top.height,
+        base: { img: trunk, x: Math.round(wallX - trunk.w / 2), y: prop.y - trunk.h, flip: inward < 0 },
+        top: { img: top, x: Math.round(wallX + inward * 14 - top.w / 2), y: prop.y - trunk.h + 8 - top.h,
                flip: inward < 0 },
       };
     }
     const pole = S("lamp_pole"), head = S("lamp_head");
     if (!pole || !head) return {};
-    const hx = inward > 0 ? Math.round(wallX - 3) : Math.round(wallX + 3 - head.width);
-    const hy = prop.y - pole.height - head.height + 8;
+    const hx = inward > 0 ? Math.round(wallX - 3) : Math.round(wallX + 3 - head.w);
+    const hy = prop.y - pole.h - head.h + 8;
     return {
-      base: { img: pole, x: Math.round(wallX - pole.width / 2), y: prop.y - pole.height, flip: false },
+      base: { img: pole, x: Math.round(wallX - pole.w / 2), y: prop.y - pole.h, flip: false },
       top: { img: head, x: hx, y: hy, flip: inward < 0 },
-      light: { x: hx + head.width * (inward > 0 ? 0.8 : 0.2), y: hy + head.height * 0.7 },
+      light: { x: hx + head.w * (inward > 0 ? 0.8 : 0.2), y: hy + head.h * 0.7 },
     };
   }
 
@@ -370,8 +377,8 @@ const Render = (() => {
     dress.props.forEach((prop, i) => {
       const top = propParts(prop).top;
       if (!top) return;
-      const under = bodies.some((b) => b.x > top.x - 2 && b.x < top.x + top.img.width + 2 &&
-                                       b.y > top.y - 2 && b.y < top.y + top.img.height + 6);
+      const under = bodies.some((b) => b.x > top.x - 2 && b.x < top.x + top.img.w + 2 &&
+                                       b.y > top.y - 2 && b.y < top.y + top.img.h + 6);
       const target = under ? 0.35 : 1;
       const a = fade.has(i) ? fade.get(i) : target;
       const next = a + Math.sign(target - a) * Math.min(Math.abs(target - a), dt * 4);
@@ -464,7 +471,7 @@ const Render = (() => {
   function drawFire(f) {
     const img = Sprites.get("campfire");
     if (img) {
-      drawSprite(img, Math.round(f.x - img.width / 2), Math.round(f.y - img.height / 2 - 3));
+      drawSprite(img, Math.round(f.x - img.w / 2), Math.round(f.y - img.h / 2 - 3));
     } else {
       // Deux carrés qui palpitent : juste de quoi repérer le feu de loin.
       const pulse = Math.sin(clock * 8) > 0 ? 1 : 0;
@@ -486,7 +493,7 @@ const Render = (() => {
     const r = Config.PORTAL_RADIUS;
     const img = Sprites.get("portal");
     if (img) {
-      drawSprite(img, Math.round(pt.x - img.width / 2), Math.round(pt.y - img.height / 2 - 3));
+      drawSprite(img, Math.round(pt.x - img.w / 2), Math.round(pt.y - img.h / 2 - 3));
       return;
     }
     ctx.fillStyle = "rgba(150, 110, 230, 0.18)";
@@ -509,7 +516,7 @@ const Render = (() => {
     const glint = still ? 0 : Math.floor(clock * 4 + x * 0.37 + y * 0.21) % 6;
     const img = Sprites.get(`gem_${"abcaaa"[glint]}`);
     if (img) {
-      drawSprite(img, Math.round(x - img.width / 2), Math.round(y - img.height / 2));
+      drawSprite(img, Math.round(x - img.w / 2), Math.round(y - img.h / 2));
       return;
     }
     const h = size / 2;
@@ -630,7 +637,7 @@ const Render = (() => {
     ctx.fillRect(g.x - 16, g.y - 16, 32, 32);
     const img = Sprites.get(`gem_${"abc"[Math.floor(clock * 8) % 3]}`);
     if (img) {
-      ctx.drawImage(img, Math.round(g.x - img.width), Math.round(g.y - img.height), img.width * 2, img.height * 2);
+      ctx.drawImage(img, Math.round(g.x - img.w), Math.round(g.y - img.h), img.w * 2, img.h * 2);
     } else {
       drawGem(g.x, g.y, 12);
     }
@@ -715,7 +722,7 @@ const Render = (() => {
     // Les solides ont une barre de vie, dès qu'ils sont entamés.
     if ((e.kind === "brute" || e.kind === "guardian" || e.maxHp >= 4) && e.hp < e.maxHp) {
       const w = Math.max(12, e.size);
-      const by = sprite ? Math.round(e.y + h - sprite.height) - 3 : y - 5;
+      const by = sprite ? Math.round(e.y + h - sprite.h) - 3 : y - 5;
       ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
       ctx.fillRect(e.x - w / 2, by, w, 2);
       ctx.fillStyle = e.kind === "guardian" ? "#ffc93d" : STYLE.heart;
@@ -899,7 +906,7 @@ const Render = (() => {
     }
     ctx.globalAlpha = 1;
     if (img) {
-      drawSprite(img, Math.round(c.x - img.width / 2), Math.round(c.y + h / 2 - img.height + 2));
+      drawSprite(img, Math.round(c.x - img.w / 2), Math.round(c.y + h / 2 - img.h + 2));
     } else {
       ctx.fillStyle = STYLE.chest;
       ctx.fillRect(x, y, w, h);
@@ -1002,7 +1009,7 @@ const Render = (() => {
   function drawIcon(key, x, y) {
     const img = Sprites.get(`icon_${key}`);
     if (img) {
-      drawSprite(img, Math.round(x - img.width / 2), Math.round(y - img.height / 2));
+      drawSprite(img, Math.round(x - img.w / 2), Math.round(y - img.h / 2));
       return;
     }
     ctx.save();
@@ -1340,16 +1347,20 @@ const Render = (() => {
       ctx.beginPath();
       ctx.ellipse(p.x, feet, 6, 2, 0, 0, Math.PI * 2);
       ctx.fill();
-      const fw = Sprites.frameWidth(name), count = Sprites.frames(name);
+      // `fa` : largeur d'une image dans la bande, en pixels de dessin ; `fw` : la
+      // même à l'écran, en unités de zone.
+      const fa = Sprites.frameWidth(name), fw = fa / A, count = Sprites.frames(name);
       const step = Math.floor(clock * 8) % 4;
-      const frame = lastStep.moving && count >= 3 ? WALK[step] : 0;
+      // 4 images ou plus : la marche les joue dans l'ordre ; 3 : immobile, A,
+      // immobile, B.
+      const frame = !lastStep.moving || count < 3 ? 0 : count >= 4 ? step : WALK[step];
       const bob = lastStep.moving && count < 3 && step % 2 ? 1 : 0;
-      const x = Math.round(p.x - fw / 2), y = Math.round(feet - img.height + 1 - bob);
+      const x = Math.round(p.x - fw / 2), y = Math.round(feet - img.h + 1 - bob);
       ctx.save();
       if (f.x < 0) { ctx.translate(x + fw, y); ctx.scale(-1, 1); } else ctx.translate(x, y);
       const rim = lastStep.moving && Sprites.outline(name, frame, HERO_RIM);
-      if (rim) ctx.drawImage(rim, -1, -1);
-      ctx.drawImage(img, frame * fw, 0, fw, img.height, 0, 0, fw, img.height);
+      if (rim) ctx.drawImage(rim, -1 / A, -1 / A, rim.w, rim.h);
+      ctx.drawImage(img, frame * fa, 0, fa, img.height, 0, 0, fw, img.h);
       ctx.restore();
       return;
     }

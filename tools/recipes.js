@@ -11,13 +11,17 @@
 // link : écart de liaison entre taches (1 sépare des éléments très proches).
 // crop : [x0, y0, x1, y1] en fractions, pour ne garder qu'une partie.
 const RECIPES = [
-  // Le héros : une planche de 3 vues (face, dos, profil) × 3 images de
-  // marche, sur fond vert dans un cadre sombre. Chaque vue devient une bande
-  // de 3 images de 20 × 30.
-  ...["hero_front", "hero_back", "hero_side"].flatMap((out, row) => [0, 1, 2].map((frame) => ({
-    src: "hero_walk_sheet.png", pick: row * 3 + frame, frame, w: 20, h: 30, out, colors: 22,
-    bgAt: [[140, 110]], area: [125, 100, 995, 1300],
-  }))),
+  // L'héroïne, la chevalière : une grille de 4 × 4 cases à fond blanc
+  // (lignes : trois quarts dos, face, dos, profil ; 4 images de marche par
+  // ligne). On lit chaque case sans ses bords et on y garde la plus grande
+  // forme, pour laisser de côté les étiquettes de texte. (L'ancien héros à
+  // capuche, hero_walk_sheet.png, reste dans assets/concepts.)
+  ...[["hero_front", 1], ["hero_back", 2], ["hero_side", 3]].flatMap(([out, row]) => [0, 1, 2, 3].map((frame) => {
+    const xs = [0, 226, 450, 673, 896], ys = [0, 302, 603, 902, 1200];
+    return { src: "knight_walk_sheet.jpg", pick: "largest", frame, w: 20, h: 30, out, colors: 24,
+             // La première colonne porte l'étiquette en bas : on s'arrête au-dessus.
+             area: [xs[frame] + 6, ys[row] + 6, xs[frame + 1] - 6, ys[row + 1] - (frame === 0 ? 30 : 6)] };
+  })),
 
   // Le sol de la forêt : deux textures qui se répètent.
   { src: "ground_sheet.webp", pick: 0, w: 48, h: 48, out: "ground_grass", fill: true, colors: 12 },
@@ -103,3 +107,8 @@ const RECIPES = [
   { src: "icons_c_sheet.webp", pick: 4, w: 12, h: 12, out: "icon_heart" },
   { src: "icons_c_sheet.webp", pick: 5, w: 12, h: 12, out: "icon_boots" },
 ];
+
+// Les tailles ci-dessus sont en unités de zone ; les images sont fabriquées
+// avec ART_SCALE pixels de dessin par unité (la même valeur que Config.ART).
+const ART_SCALE = 2;
+for (const r of RECIPES) { r.w *= ART_SCALE; r.h *= ART_SCALE; }

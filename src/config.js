@@ -23,6 +23,9 @@ const SCREEN_W = (() => {
 
 const Config = Object.freeze({
   TILE: 16,
+  // Finesse des images : pixels de dessin par unité de zone. Le jeu calcule
+  // tout en unités ; les images en ont ART fois plus de détails.
+  ART: 2,
 
   // 26 tuiles de 16 px de haut ; la largeur vaut au moins 12 tuiles (192 px,
   // un ratio 9:19.5 d'iPhone), davantage sur un écran plus large.
