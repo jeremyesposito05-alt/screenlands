@@ -94,6 +94,9 @@ const Menu = (() => {
       case "play": Save.clearNotice(); return start(false);
       case "sandbox": return start(true);
       case "shop": return open("shop");
+      case "heroStyle":
+        Save.setHeroStyle(Save.data.heroStyle === "3d" ? "pixel" : "3d");
+        break;
       case "mode":
         Save.setMode(MODE_ORDER[(MODE_ORDER.indexOf(Save.data.mode) + 1) % MODE_ORDER.length]);
         break;
@@ -183,6 +186,7 @@ const Menu = (() => {
         <p class="note dim" style="margin:0">${MODE_HELP[d.mode]}</p>
         ${btn("shop", `Atelier · ${d.bank} 💎`, "", "big")}
         ${btn("sandbox", "Bac à sable", "", "big")}
+        ${btn("heroStyle", `Héroïne : ${d.heroStyle === "3d" ? "3D" : "pixel"}`)}
         ${btn("controls", `Commandes : ${MODES[Input.mode].label}`)}
         ${audioButtons()}
       </div>

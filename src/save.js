@@ -20,7 +20,9 @@ const Save = (() => {
   // `mode` : la difficulté choisie (voir Config.MODES) ; `hardBanked` : tout ce
   // qui a été mis à l'abri en mode difficile, qui ouvre des achats réservés.
   const data = { bank: 0, best: 0, controls: "swipe", upgrades: {}, sound: true, music: true,
-                 mode: "normal", hardBanked: 0, shopVersion: 2, refundNotice: 0 };
+                 mode: "normal", hardBanked: 0, shopVersion: 2, refundNotice: 0,
+                 // `heroStyle` : la chevalière en pixel art ("pixel") ou en 3D ("3d").
+                 heroStyle: "pixel" };
 
   let saved = null;
   try {
@@ -64,6 +66,10 @@ const Save = (() => {
     },
     clearNotice() {
       data.refundNotice = 0;
+      write();
+    },
+    setHeroStyle(style) {
+      data.heroStyle = style;
       write();
     },
     setMode(mode) {

@@ -23,6 +23,18 @@ const RECIPES = [
              area: [xs[frame] + 6, ys[row] + 6, xs[frame + 1] - 6, ys[row + 1] - (frame === 0 ? 30 : 6)] };
   })),
 
+  // La chevalière en 3D (essai) : 8 rangées de 14 images, une case de 55,8 ×
+  // 57 pixels. Rangées : face, marche de face, dos, marche de dos, gauche,
+  // marche à gauche, droite, marche à droite (on garde la droite : le jeu la
+  // retourne pour la gauche). Les cases diagonales du bas ne servent pas.
+  ...[["hero3d_front_idle", 0], ["hero3d_front", 1], ["hero3d_back_idle", 2], ["hero3d_back", 3],
+      ["hero3d_side_idle", 6], ["hero3d_side", 7]].flatMap(([out, row]) =>
+    Array.from({ length: 14 }, (_, frame) => {
+      const cw = (843 - 62) / 14, ch = 57;
+      return { src: "knight3d_sheet.webp", pick: "largest", frame, w: 20, h: 30, out, colors: 28,
+               area: [Math.round(62 + frame * cw) + 2, 6 + row * ch + 2, Math.round(62 + (frame + 1) * cw) - 2, 6 + (row + 1) * ch - 2] };
+    })),
+
   // Les esprits compagnons : 10 rangées de 3 images de flottement, sur fond
   // vert dans un cadre sombre. Les étincelles relient parfois deux rangées :
   // leurs limites sont fixées à la main, et on garde la plus grande forme.

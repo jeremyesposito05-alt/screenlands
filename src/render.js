@@ -1421,7 +1421,12 @@ const Render = (() => {
     // Clignote tant qu'il est intouchable après un coup.
     if (p.invuln > 0 && Math.floor(clock * 12) % 2 === 0) return;
     const f = p.facing;
-    const name = f.y < 0 && !f.x ? "hero_back" : f.x ? "hero_side" : "hero_front";
+    // La vue, puis le jeu d'images : la chevalière pixel, ou en 3D si elle est
+    // choisie au menu. La 3D a aussi une animation immobile (la respiration).
+    const view = f.y < 0 && !f.x ? "back" : f.x ? "side" : "front";
+    const set = Save.data.heroStyle === "3d" && Sprites.get(`hero3d_${view}`) ? "hero3d" : "hero";
+    const idle = !lastStep.moving && Sprites.get(`${set}_${view}_idle`);
+    const name = idle ? `${set}_${view}_idle` : `${set}_${view}`;
     const img = Sprites.get(name);
     if (img) {
       // Pour qu'on le retrouve d'un coup d'œil : une flaque de lumière
@@ -1439,10 +1444,12 @@ const Render = (() => {
       // `fa` : largeur d'une image dans la bande, en pixels de dessin ; `fw` : la
       // même à l'écran, en unités de zone.
       const fa = Sprites.frameWidth(name), fw = fa / A, count = Sprites.frames(name);
-      const step = Math.floor(clock * 8) % 4;
-      // 4 images ou plus : la marche les joue dans l'ordre ; 3 : immobile, A,
-      // immobile, B.
-      const frame = !lastStep.moving || count < 3 ? 0 : count >= 4 ? step : WALK[step];
+      // Une longue bande (la 3D, 14 images) se joue vite en marche, lentement à
+      // l'arrêt ; 4 images : dans l'ordre ; 3 : immobile, A, immobile, B.
+      const fps = count >= 8 ? (idle ? 8 : 18) : 8;
+      const step = Math.floor(clock * fps) % Math.max(4, count);
+      const frame = count >= 4 ? (lastStep.moving || idle ? step : 0)
+        : !lastStep.moving || count < 3 ? 0 : WALK[step % 4];
       const bob = lastStep.moving && count < 3 && step % 2 ? 1 : 0;
       const x = Math.round(p.x - fw / 2), y = Math.round(feet - img.h + 1 - bob);
       ctx.save();

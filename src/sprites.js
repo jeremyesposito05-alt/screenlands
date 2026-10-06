@@ -11,6 +11,7 @@
 const Sprites = (() => {
   const NAMES = [
     "hero_front", "hero_side", "hero_back",
+    "hero3d_front", "hero3d_side", "hero3d_back", "hero3d_front_idle", "hero3d_side_idle", "hero3d_back_idle",
     "ground_grass", "ground_dirt",
     "decal_grass", "decal_flowers", "decal_pebbles", "decal_puddle", "decal_leaves", "decal_root",
     "rock_a", "rock_b", "rock_small_a", "rock_small_b",
@@ -29,6 +30,7 @@ const Sprites = (() => {
   // Les images animées sont des bandes d'images côte à côte : la largeur
   // d'une image. Les autres n'en ont qu'une.
   const FRAME_W = { hero_front: 40, hero_side: 40, hero_back: 40 };
+  for (const v of ["front", "side", "back"]) FRAME_W[`hero3d_${v}`] = FRAME_W[`hero3d_${v}_idle`] = 40;
   const images = {};
   // Augmente à chaque image arrivée : le rendu s'en sert pour savoir que ce
   // qu'il a mis en cache est à refaire.
