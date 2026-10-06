@@ -165,6 +165,13 @@ const Generator = (() => {
       c.chest = { tier: Loot.tierFor(c.distance, rng), item: null };
     }
 
+    // 5 ter. Les salles scellées : en entrant, les portes se ferment, et il
+    // faut vaincre toutes les vagues de créatures pour ressortir. Jamais au
+    // bout de la carte (le Gardien a la sienne), ni tout près du départ.
+    const sealCount = (opts.floor || 1) > 1 ? 2 : 1;
+    const sealable = rng.shuffle(wild.filter((c) => c.distance >= 2 && c.distance < far));
+    for (const c of sealable.slice(0, sealCount)) c.sealed = true;
+
     // 5 bis. Les esprits errants : quelques écrans en abritent un. Lequel, c'est
     // World qui le tire, parmi ceux qu'on peut rencontrer.
     const spirits = Config.SPIRITS_PER_MAP + rng.int(Config.SPIRITS_EXTRA + 1);
@@ -201,7 +208,7 @@ const Generator = (() => {
 
   function placeCamp(map, fits) {
     const isBoss = (c) => map.boss && c.x === map.boss.x && c.y === map.boss.y;
-    const wild = [...map.cells.values()].filter((c) => !LAYOUTS[c.layout].safe && !isBoss(c));
+    const wild = [...map.cells.values()].filter((c) => !LAYOUTS[c.layout].safe && !isBoss(c) && !c.sealed);
     const ok = wild.filter(fits);
     const c = map.campRng.pick(ok.length ? ok : wild);
     map.camp = { x: c.x, y: c.y };

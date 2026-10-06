@@ -180,6 +180,14 @@ l'égide et les reliques sont encore des formes de couleur. Voir
   partir du 3e. Chaque étage garde sa mémoire (coffres, gemmes, carte vue),
   sauf ses monstres : ils sont tous de retour quand on y revient. Réglages
   `FLOOR_*` dans `src/config.js`.
+- **Des salles scellées.** Une ou deux par carte, annoncées depuis la salle
+  voisine par une porte menaçante (halo rouge, ronces, crâne) et sur la
+  mini-carte par un liseré rouge. Quelques pas dedans, les ronces bouchent les
+  portes : il faut vaincre 2 vagues de créatures (3 aux étages profonds) pour
+  ressortir, et un coffre rare (épique dès le 3e étage) apparaît. Le Chasseur
+  n'y entre pas. La salle du Gardien se ferme aussi, sauf en facile : en
+  normal, les ronces cèdent au bout de 25 s ; en difficile, on ne sort qu'en
+  le battant.
 - **Trois modes**, choisis avant chaque expédition : facile (le butin porté est
   gardé à la mort, gemmes ×0,5), normal (25 % gardé, jusqu'à 60 % avec le
   coffre-fort), difficile (tout perdu, gemmes ×1,5, achats réservés).

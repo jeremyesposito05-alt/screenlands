@@ -195,6 +195,8 @@ const ZoneRegistry = (() => {
     // Les portes de la zone vers ses voisines : {left, right, up, down},
     // chacune false ou sa position 1, 2, 3 (voir borderWalls).
     exits(cx, cy) { return cell(cx, cy).links; },
+    // Une salle scellée (voir World) ?
+    sealed(cx, cy) { return !!cell(cx, cy).sealed; },
     // Un esprit errant attend-il dans cet écran ?
     spirit(cx, cy) { return !!cell(cx, cy).spirit; },
     // Le coffre de cet écran, {tier, item}, ou null.

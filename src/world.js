@@ -148,6 +148,9 @@ const World = (() => {
     // time, color}. Le jeu ne s'arrête pas pour elle.
     wildSpirit: null,
     bubble: null,
+    // La salle qui se verrouille : {kind: "waves" | "boss", armed, active, wave,
+    // total, timer} ou null (voir updateSeal).
+    seal: null,
     // Mode test (voir sandbox) : banque intacte ; `god` rend invincible.
     sandbox: false,
     god: false,
@@ -190,7 +193,7 @@ const World = (() => {
     // elle n'y revient pas, même en ressortant et en rentrant (sinon on
     // dévorerait les rôdeurs en boucle). Remise à zéro en changeant d'étage.
     return { map, taken: new Set(), killed: new Map(), opened: new Set(), drops: new Map(),
-             visited: new Set(), superUsed: new Set(), bossDead: false };
+             visited: new Set(), superUsed: new Set(), cleared: new Set(), bossDead: false };
   }
 
   function useFloor(n) {
@@ -202,6 +205,7 @@ const World = (() => {
     r.opened = f.opened;
     r.drops = f.drops;
     r.superUsed = f.superUsed;
+    r.cleared = f.cleared;
     r.bossDead = f.bossDead;
     state.visited = f.visited;
   }
@@ -346,10 +350,19 @@ const World = (() => {
 
     spawnEnemies(cx, cy, zone, distance, campHere);
 
+    // Salle scellée, ou salle du Gardien hors du mode facile : elle se
+    // verrouillera dès qu'on y aura fait quelques pas.
+    state.seal = null;
+    if (ZoneRegistry.sealed(cx, cy) && !state.run.cleared.has(key)) {
+      state.seal = { kind: "waves", armed: true, active: false, wave: 0, total: floorExtra() ? 3 : 2 };
+    } else if (ZoneRegistry.isBoss(cx, cy) && !state.run.bossDead && state.run.mode !== "easy") {
+      state.seal = { kind: "boss", armed: true, active: false, timer: state.run.mode === "normal" ? Config.BOSS_SEAL_TIME : Infinity };
+    }
+
     // Le Chasseur suit le joueur : il entre par la même porte, un peu après
     // lui. Il ne passe ni au camp de base ni autour du feu.
     state.hunter = null;
-    state.hunterComing = hunterActive() && !zone.safe && !campHere
+    state.hunterComing = hunterActive() && !zone.safe && !campHere && !state.seal
       ? { at: { x: p.x, y: p.y }, time: Config.HUNTER_DELAY }
       : null;
   }
@@ -360,6 +373,14 @@ const World = (() => {
   // liste tant qu'ils ne se sont pas relevés. Aucun ennemi au camp de base ni
   // autour du feu ; le camp éteint, la zone retrouve les siens.
   function spawnEnemies(cx, cy, zone, distance, campHere) {
+    // Une salle scellée pas encore vaincue est vide en entrant : ses créatures
+    // arrivent par vagues quand les portes se ferment (voir updateSeal).
+    if (ZoneRegistry.sealed(cx, cy) && !state.run.cleared.has(`${cx},${cy}`)) {
+      state.enemies = [];
+      state.superGem = null;
+      state.frightened = 0;
+      return;
+    }
     const level = threatLevel();
     const table = Config.ENEMIES_BY_DISTANCE;
     const planned = zone.safe || campHere ? 0
@@ -535,7 +556,7 @@ const World = (() => {
     // Le Chasseur surgit dès le dernier palier, sans attendre qu'on change de
     // zone : il arrive par la porte la plus proche.
     if (level >= Config.THREAT_MAX && state.threatLevel < Config.THREAT_MAX &&
-        !state.zone.safe && !state.fire) {
+        !state.zone.safe && !state.fire && !(state.seal && state.seal.active)) {
       state.hunterComing = { at: nearestDoor(), time: Config.HUNTER_DELAY };
       emit("hunter");
     }
@@ -703,8 +724,111 @@ const World = (() => {
     }
     updateBullets(dt);
     if (state.phase === "dead") return;
+    updateSeal(dt);
 
     changeZoneIfNeeded();
+  }
+
+  // --- La salle qui se verrouille ---
+  // Elle s'arme en entrant et se ferme quand le joueur s'est un peu avancé
+  // (pour qu'il ne reste pas coincé dans l'embrasure). Salle scellée : des
+  // ronces bouchent les portes, des vagues de créatures arrivent, et tout
+  // rouvre quand la dernière est vaincue, avec un coffre au centre. Salle du
+  // Gardien : en normal, les ronces faiblissent au bout de BOSS_SEAL_TIME
+  // (on peut fuir) ; en difficile, on ne sort qu'en le battant. Le Chasseur
+  // n'entre pas dans une salle fermée.
+  function updateSeal(dt) {
+    const s = state.seal;
+    if (!s) return;
+    const p = state.player, W = Config.ZONE_W, H = Config.ZONE_H;
+    if (s.armed) {
+      if (Math.min(p.x, W - p.x, p.y, H - p.y) < Config.SEAL_TRIGGER) return;
+      s.armed = false;
+      s.active = true;
+      closeDoors();
+      state.hunter = null;
+      state.hunterComing = null;
+      emit("seal");
+      if (s.kind === "waves") {
+        showBanner("Salle scellée", "vaincs toutes les créatures pour sortir", 2.2);
+        spawnWave();
+      } else {
+        showBanner("Le Gardien t'enferme",
+          state.run.mode === "hard" ? "bats-le pour sortir" : `les ronces céderont dans ${Config.BOSS_SEAL_TIME} s`, 2.5);
+      }
+      return;
+    }
+    if (!s.active) return;
+    if (s.kind === "boss") {
+      if (state.run.bossDead) return openDoors();
+      if ((s.timer -= dt) <= 0) {
+        openDoors();
+        showBanner("Les ronces cèdent", "tu peux fuir… ou finir le combat", 2.2);
+      }
+      return;
+    }
+    if (state.enemies.some((e) => e.hp > 0)) return;
+    if (s.wave < s.total) return spawnWave();
+    openDoors();
+    state.run.cleared.add(zoneKey());
+    const tier = (state.run.floor || 1) >= 3 ? "epic" : "rare";
+    // Le coffre apparaît au centre, ou au point du feu si le joueur y est déjà.
+    const spot = Math.hypot(p.x - W / 2, p.y - H / 2) > 30 || !state.zone.fire ? { x: W / 2, y: H / 2 } : state.zone.fire;
+    state.drops.push({ kind: "chest", tier, item: null, x: spot.x, y: spot.y, size: 12 });
+    emit("victory");
+    showBanner("Salle libérée !", "un coffre est apparu", 2.4);
+  }
+
+  // Les portes de la zone, bouchées par des ronces : des murs de plus, que les
+  // ennemis contournent aussi.
+  function closeDoors() {
+    const exits = ZoneRegistry.exits(state.coords.x, state.coords.y);
+    const W = Config.ZONE_W, H = Config.ZONE_H, t = Config.WALL, half = Config.DOOR / 2;
+    for (const side of ["left", "right", "up", "down"]) {
+      if (!exits[side]) continue;
+      const c = doorCenter(side, exits[side]);
+      const r = side === "left" ? { x: 0, y: c.y - half, w: t, h: half * 2 }
+        : side === "right" ? { x: W - t, y: c.y - half, w: t, h: half * 2 }
+        : side === "up" ? { x: c.x - half, y: 0, w: half * 2, h: t }
+        : { x: c.x - half, y: H - t, w: half * 2, h: t };
+      state.solids.push({ kind: "seal", side, ...r });
+    }
+    state.navs = new Map();
+  }
+
+  function openDoors() {
+    state.solids = state.solids.filter((s) => s.kind !== "seal");
+    state.navs = new Map();
+    state.seal = null;
+    emit("unseal");
+  }
+
+  // Une vague : de plus en plus de créatures, tirées pour la profondeur de la
+  // salle, sur les points d'apparition les plus éloignés du joueur.
+  function spawnWave() {
+    const s = state.seal, { x: cx, y: cy } = state.coords;
+    s.wave++;
+    const depth = depthOf(state.distance), level = threatLevel();
+    const count = Config.SEAL_WAVES[Math.min(s.wave, Config.SEAL_WAVES.length) - 1] + 2 * floorExtra();
+    const roster = Enemies.roster(count, depth, makeRandom(deriveSeed(ZoneRegistry.seed, cx, cy, 500 + s.wave)));
+    const p = state.player;
+    const spots = state.zone.spawns.slice()
+      .sort((a, b) => Math.hypot(b.x - p.x, b.y - p.y) - Math.hypot(a.x - p.x, a.y - p.y));
+    if (!spots.length) return;
+    const free = (at) => !state.solids.some((r) => Physics.overlapsRect({ x: at.x, y: at.y, size: 12 }, r));
+    const eliteChance = Math.min(Config.ELITE_CHANCE_MAX, Config.ELITE_CHANCE * level + Config.FLOOR_ELITE_CHANCE * floorExtra());
+    roster.forEach((type, i) => {
+      const base = spots[i % spots.length], ring = Math.floor(i / spots.length);
+      const shifted = { x: base.x + ((i * 7) % 3 - 1) * 12 * ring, y: base.y + ((i * 5) % 3 - 1) * 12 * ring };
+      const group = Enemies.spawnGroup(type, ring && free(shifted) ? shifted : base, depth, {
+        elite: Math.random() < eliteChance,
+        speed: Config.THREAT_SPEED * level,
+        slot: `seal${s.wave}-${i}`,
+      });
+      for (const e of group) e.wake = 0.5;
+      state.enemies.push(...group);
+    });
+    if (s.wave > 1) showBanner(`Vague ${s.wave} / ${s.total}`, "ils arrivent", 1.4);
   }
 
   // Un esprit errant touché rejoint la file (ou y monte d'un niveau) et dit

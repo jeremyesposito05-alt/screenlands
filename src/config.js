@@ -129,6 +129,12 @@ const Config = Object.freeze({
   FLOOR_GEM_BONUS: 1,
   CAMP_FLOOR: 3,
   STAIRS_RADIUS: 10,
+  // Les salles scellées : à quelle distance des bords les portes se ferment,
+  // la taille des vagues, et combien de temps le Gardien tient ses ronces
+  // en mode normal.
+  SEAL_TRIGGER: 36,
+  SEAL_WAVES: [3, 5, 7],
+  BOSS_SEAL_TIME: 25,
   // Esprits errants par carte (au moins, et de plus au hasard).
   SPIRITS_PER_MAP: 3,
   SPIRITS_EXTRA: 2,

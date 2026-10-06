@@ -13,6 +13,7 @@
 const Render = (() => {
   const STYLE = {
     wall: "#2e3342",
+    seal: "#5a1a2a",
     rock: "#4f5463",
     player: "#f2c44d",
     // Les quatre fantômes, dans les couleurs de Pac-Man.
@@ -118,6 +119,7 @@ const Render = (() => {
         ctx.fillRect(s.x, s.y, s.w, s.h);
       }
     }
+    for (const s of solids) if (s.kind === "seal") drawThorns(s);
     if (state.chest) drawChest(state.chest);
     for (const d of state.drops) {
       if (d.kind === "chest") drawChest(d);
@@ -204,6 +206,78 @@ const Render = (() => {
     c.restore();
   }
 
+  // --- Les salles qui se verrouillent ---
+  // Les ronces qui bouchent une porte : des tiges sombres entrelacées, des
+  // épines rouges, qui ondulent un peu.
+  function drawThorns(s) {
+    const horizontal = s.w > s.h;
+    const len = horizontal ? s.w : s.h;
+    ctx.fillStyle = "rgba(20, 8, 20, 0.55)";
+    ctx.fillRect(s.x, s.y, s.w, s.h);
+    for (let k = 0; k < 3; k++) {
+      ctx.strokeStyle = k === 1 ? "#5a1a2a" : "#2e1424";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= 16; i++) {
+        const t = i / 16, a = t * len;
+        const wave = Math.sin(t * Math.PI * 4 + k * 2 + clock * 2) * 3;
+        const x = horizontal ? s.x + a : s.x + s.w / 2 + wave + (k - 1) * 3;
+        const y = horizontal ? s.y + s.h / 2 + wave + (k - 1) * 3 : s.y + a;
+        if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#c8323a";
+    for (let i = 2; i < len; i += 6) {
+      const x = horizontal ? s.x + i : s.x + s.w / 2 + Math.sin(i) * 4;
+      const y = horizontal ? s.y + s.h / 2 + Math.sin(i) * 4 : s.y + i;
+      ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+    }
+  }
+
+  // Une porte qui mène à une salle qui se verrouillera : un halo rouge qui
+  // palpite, des ronces sur ses bords et un crâne au-dessus. Dessinée avec le
+  // sol, dans la salle voisine.
+  function drawMenace(g, side, c) {
+    const W = Config.ZONE_W, H = Config.ZONE_H, t = Config.WALL, half = Config.DOOR / 2;
+    const cx = side === "left" ? t / 2 : side === "right" ? W - t / 2 : c.x;
+    const cy = side === "up" ? t / 2 : side === "down" ? H - t / 2 : c.y;
+    const glow = g.createRadialGradient(cx, cy, 2, cx, cy, half + 10);
+    glow.addColorStop(0, "rgba(200, 30, 50, 0.45)");
+    glow.addColorStop(1, "rgba(200, 30, 50, 0)");
+    g.fillStyle = glow;
+    g.fillRect(cx - half - 10, cy - half - 10, (half + 10) * 2, (half + 10) * 2);
+    // Des ronces qui pendent aux deux bords du passage.
+    g.strokeStyle = "#3a1428";
+    g.lineWidth = 1.5;
+    const along = side === "left" || side === "right";
+    for (const e of [-1, 1]) {
+      g.beginPath();
+      for (let i = 0; i <= 8; i++) {
+        const a = e * (half - 2 - i * 1.5), b = (i - 4) * 2 + Math.sin(i * 1.7) * 2;
+        const x = along ? cx + b : cx + a, y = along ? cy + a : cy + b;
+        if (i) g.lineTo(x, y); else g.moveTo(x, y);
+      }
+      g.stroke();
+    }
+    // Un petit crâne pâle, côté salle.
+    const sx = side === "left" ? cx + 12 : side === "right" ? cx - 12 : cx;
+    const sy = side === "up" ? cy + 12 : side === "down" ? cy - 14 : cy - half - 4;
+    g.fillStyle = "#e8e0d0";
+    g.fillRect(sx - 3, sy - 3, 6, 5);
+    g.fillRect(sx - 2, sy + 2, 4, 2);
+    g.fillStyle = "#1d1230";
+    g.fillRect(sx - 2, sy - 1, 1.5, 1.5);
+    g.fillRect(sx + 0.5, sy - 1, 1.5, 1.5);
+  }
+
+  // La porte vers cette voisine est-elle menaçante ?
+  function menacing(state, nx, ny) {
+    if (!ZoneRegistry.has(nx, ny)) return false;
+    if (ZoneRegistry.sealed(nx, ny)) return !state.run.cleared.has(`${nx},${ny}`);
+    return ZoneRegistry.isBoss(nx, ny) && !state.run.bossDead && state.run.mode !== "easy";
+  }
+
   // --- Couche 1 : le sol ---
   // Tout ce qui ne bouge pas, peint une fois par zone dans un canvas à la
   // taille de la zone, puis recopié à chaque image.
@@ -211,7 +285,7 @@ const Render = (() => {
   let groundCanvas = null, groundKey = "";
 
   function groundLayer(state, dress) {
-    const key = `${ZoneRegistry.seed}|${state.coords.x},${state.coords.y}|${Sprites.version}`;
+    const key = `${ZoneRegistry.seed}|${state.coords.x},${state.coords.y}|${Sprites.version}|${state.run.cleared.size}|${state.run.bossDead}`;
     if (groundCanvas && key === groundKey) return groundCanvas;
     groundKey = key;
     const W = Config.ZONE_W, H = Config.ZONE_H, t = Config.WALL;
@@ -254,7 +328,7 @@ const Render = (() => {
     // Les obstacles : un rocher par bloc carré, de la haie pour les murs
     // intérieurs allongés.
     for (const s of state.solids) {
-      if (s.kind === "wall") continue;
+      if (s.kind === "wall" || s.kind === "seal") continue;
       if (s.w === s.h) {
         const big = s.w > Config.TILE;
         const img = S(`${big ? "rock" : "rock_small"}_${(s.x * 7 + s.y * 3) % 2 ? "a" : "b"}`);
@@ -291,6 +365,14 @@ const Render = (() => {
       // leur largeur : on les cale sur les bords du passage.
       if (l) g.drawImage(l, Math.round(cx - half - l.w * 0.85), y, l.w, l.h);
       if (r) g.drawImage(r, Math.round(cx + half - r.w * 0.17), y, r.w, r.h);
+    }
+
+    // Les portes vers une salle qui se verrouillera.
+    const D = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
+    for (const side in D) {
+      if (exits[side] && menacing(state, state.coords.x + D[side][0], state.coords.y + D[side][1])) {
+        drawMenace(g, side, doorCenter(side, exits[side]));
+      }
     }
 
     // Les pieds des arbres et des lampadaires, plantés dans les murs.
@@ -466,7 +548,7 @@ const Render = (() => {
   // --- Réactions de l'écran ---
   // Une secousse quand ça cogne, un voile rouge quand le héros est touché.
   const SHAKE_TIME = 0.25, HURT_FLASH = 0.35;
-  const SHAKES = { hurt: 3, allyDown: 2, explode: 3.5, killBig: 1.5, victory: 3, death: 4 };
+  const SHAKES = { hurt: 3, allyDown: 2, explode: 3.5, killBig: 1.5, victory: 3, death: 4, seal: 4 };
   let shake = 0, shakeAmp = 0, hurtFlash = 0;
   function react(events) {
     for (const e of events) {
@@ -1611,6 +1693,15 @@ const Render = (() => {
       drawIcon(key, x, y);
       x += 13;
     }
+    // Dans une salle fermée : ce qui reste à vaincre, ou le temps avant que
+    // les ronces du Gardien cèdent.
+    const seal = state.seal;
+    if (seal && seal.active) {
+      const left = state.enemies.filter((e) => e.hp > 0).length;
+      const msg = seal.kind === "waves" ? `vague ${seal.wave}/${seal.total} · ${left} à vaincre`
+        : Number.isFinite(seal.timer) ? `les ronces cèdent dans ${Math.ceil(seal.timer)} s` : "bats le Gardien pour sortir";
+      text(msg, Config.ZONE_W / 2, 20, "#ff8a8a", "center", 7);
+    }
     const floor = state.run.floor > 1 ? `étage ${state.run.floor} · ` : "";
     text(`${floor}banque ${Save.data.bank}`, Config.ZONE_W - 4, Config.ZONE_H - 12, STYLE.dim, "right");
   }
@@ -1650,6 +1741,12 @@ const Render = (() => {
       if (chestHere && (seen || lantern) && !here) {
         ctx.fillStyle = TIERS[c.chest.tier];
         ctx.fillRect(x + 1, y + 1, 2, 2);
+      }
+      // Une salle scellée pas encore vaincue : un liseré rouge.
+      if (ZoneRegistry.sealed(c.x, c.y) && !state.run.cleared.has(`${c.x},${c.y}`)) {
+        ctx.strokeStyle = STYLE.heart;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x - 0.5, y - 0.5, cell + 1, cell + 1);
       }
       if (ZoneRegistry.isStairs(c.x, c.y) && (seen || lantern) && !here) {
         ctx.fillStyle = "#ffffff";

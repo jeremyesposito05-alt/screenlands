@@ -141,6 +141,11 @@ const Sound = (() => {
         gemTimer = 0.9;
       } else if (e.type === "stairs") {
         play("portal", 0.8);
+      } else if (e.type === "seal") {
+        play("explode", 0.6);
+        play("threat", 0.8);
+      } else if (e.type === "unseal") {
+        play("portal", 1.2);
       } else if (SFX[e.type]) {
         play(e.type);
       }
