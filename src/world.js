@@ -186,8 +186,11 @@ const World = (() => {
   // en quittant l'étage et on la retrouve en revenant, sauf les morts : tous
   // les monstres d'un étage retrouvé sont de retour.
   function makeFloor(map) {
+    // `superUsed` : les salles dont la super-gemme a déjà servi sur cet étage ;
+    // elle n'y revient pas, même en ressortant et en rentrant (sinon on
+    // dévorerait les rôdeurs en boucle). Remise à zéro en changeant d'étage.
     return { map, taken: new Set(), killed: new Map(), opened: new Set(), drops: new Map(),
-             visited: new Set(), bossDead: false };
+             visited: new Set(), superUsed: new Set(), bossDead: false };
   }
 
   function useFloor(n) {
@@ -198,6 +201,7 @@ const World = (() => {
     r.killed = f.killed;
     r.opened = f.opened;
     r.drops = f.drops;
+    r.superUsed = f.superUsed;
     r.bossDead = f.bossDead;
     state.visited = f.visited;
   }
@@ -213,6 +217,7 @@ const World = (() => {
     }
     const down = n > r.floor;
     r.floors[n].killed.clear();
+    r.floors[n].superUsed.clear();
     useFloor(n);
     r.deepest = Math.max(r.deepest || 1, n);
     const cell = down ? ZoneRegistry.base : ZoneRegistry.stairs;
@@ -413,13 +418,23 @@ const World = (() => {
       const count = rng.chance(chance) ? 1 + (depth >= 6 && rng.chance(0.35) ? 1 : 0) : 0;
       const far = zone.spawns.slice().sort((a, b) => Math.hypot(b.x - p.x, b.y - p.y) - Math.hypot(a.x - p.x, a.y - p.y));
       for (let k = 0; k < count; k++) {
-        state.enemies.push(Enemies.spawn("prowler", far[k % far.length], depth, { speed: Config.THREAT_SPEED * level }));
+        state.enemies.push(prowler(far[k % far.length], depth, level));
       }
       // Dans l'écran de l'escalier, le point du feu est pris : la super-gemme va
       // sur celui d'une gemme.
       const at = ZoneRegistry.isStairs(cx, cy) ? zone.gems[0] || zone.fire : zone.fire;
-      if (count && at) state.superGem = { kind: "superGem", x: at.x, y: at.y, size: 10 };
+      if (count && at && !state.run.superUsed.has(`${cx},${cy}`)) state.superGem = { kind: "superGem", x: at.x, y: at.y, size: 10 };
     }
+  }
+
+  // Un rôdeur : sa vitesse suit celle du joueur (de PROWLER_SPEED_BASE à
+  // PROWLER_SPEED_MAX de la vitesse de base du joueur selon la profondeur),
+  // pour qu'il colle sans jamais être tout à fait aussi rapide.
+  function prowler(at, depth, level) {
+    const e = Enemies.spawn("prowler", at, depth);
+    e.speed = Config.PLAYER_SPEED * Math.min(Config.PROWLER_SPEED_MAX,
+      Config.PROWLER_SPEED_BASE + Config.PROWLER_SPEED_PER_DEPTH * depth) + Config.THREAT_SPEED * level;
+    return e;
   }
 
   // La grille de navigation de la zone pour des corps de cette taille, faite
@@ -717,6 +732,7 @@ const World = (() => {
     const g = state.superGem;
     if (!g || !Physics.overlapsBody(state.player, g)) return;
     state.superGem = null;
+    state.run.superUsed.add(zoneKey());
     state.frightened = Config.FRIGHT_TIME;
     for (const e of state.enemies) if (e.type === "prowler") { e.frightened = Config.FRIGHT_TIME; e.waypoint = null; }
     emit("superGem", g);
@@ -1151,6 +1167,13 @@ const World = (() => {
         .slice().sort((a, b) => Math.hypot(b.x - p.x, b.y - p.y) - Math.hypot(a.x - p.x, a.y - p.y));
       const at = spots[state.enemies.length % spots.length];
       const distance = Math.max(1, state.distance);
+      if (type === "prowler") {
+        const e = prowler(at, distance, threatLevel());
+        e.wake = 0.3;
+        state.enemies.push(e);
+        if (!state.superGem) state.superGem = { kind: "superGem", x: Config.ZONE_W / 2, y: Config.ZONE_H / 2, size: 10 };
+        return;
+      }
       const group = Enemies.spawnGroup(type, at, distance, {
         elite,
         speed: Config.THREAT_SPEED * threatLevel(),
@@ -1159,10 +1182,6 @@ const World = (() => {
       });
       for (const e of group) e.wake = 0.3;
       state.enemies.push(...group);
-      // Un rôdeur vient avec sa super-gemme, au centre de la salle.
-      if (type === "prowler" && !state.superGem) {
-        state.superGem = { kind: "superGem", x: Config.ZONE_W / 2, y: Config.ZONE_H / 2, size: 10 };
-      }
     },
     killAll() {
       for (const e of state.enemies) {

@@ -171,10 +171,13 @@ l'égide et les reliques sont encore des formes de couleur. Voir
 - **Trois modes**, choisis avant chaque expédition : facile (le butin porté est
   gardé à la mort, gemmes ×0,5), normal (25 % gardé, jusqu'à 60 % avec le
   coffre-fort), difficile (tout perdu, gemmes ×1,5, achats réservés).
-- **Des rôdeurs**, les fantômes de Pac-Man : rapides, collants, impossibles à
-  tuer. Là où il y en a, une **super-gemme** les rend bleus pendant 6 s : ils
-  fuient, et les attraper fait gicler des gemmes, de plus en plus à chaque
-  rôdeur.
+- **Des rôdeurs** (le « ressenti Pac-Man », mais un look à nous : des masques
+  de bois sur des lambeaux d'ombre, aux yeux qui luisent) : collants,
+  impossibles à tuer, à 78 % puis jusqu'à 95 % de la vitesse de la
+  chevalière selon la profondeur. Là où il y en a, une **super-gemme** les rend
+  pâles et fendus pendant 6 s : ils fuient, et les attraper fait gicler des
+  gemmes, de plus en plus à chaque rôdeur. Une super-gemme ne sert qu'une
+  fois par salle et par étage (ressortir et revenir ne la fait pas revenir).
 - **Du son** : une trentaine de bruitages (coups, gemmes qui montent la gamme
   quand on les enchaîne, coffres selon leur rareté, coups reçus, alertes de
   menace, Chasseur) et une musique qui suit la situation : calme au camp de

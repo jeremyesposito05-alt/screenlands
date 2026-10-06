@@ -420,6 +420,10 @@ const Render = (() => {
     }
     if (state.fire) lights.push({ x: state.fire.x, y: state.fire.y, r: 72 * flicker, warm: true });
     if (state.portal) lights.push({ x: state.portal.x, y: state.portal.y, r: 46, warm: false });
+    // Les yeux des rôdeurs en chasse luisent dans la pénombre.
+    for (const e of state.enemies) {
+      if (e.type === "prowler" && !(e.frightened > 0)) lights.push({ x: e.x, y: e.y - 3, r: 16, color: "#ff6a2a" });
+    }
     // Chaque esprit éclaire de sa couleur.
     for (const a of [...state.run.allies, ...(state.wildSpirit ? [state.wildSpirit] : [])]) {
       lights.push({ x: a.x, y: a.y - 9, r: 22, color: spiritColor(a.type) });
@@ -536,70 +540,89 @@ const Render = (() => {
     ctx.fill();
   }
 
-  // --- Le rôdeur : un petit fantôme de Pac-Man, en pixels ---
-  // Le corps en deux images (le bas de la robe ondule), contour sombre, et
-  // les yeux par-dessus. Violet en chasse, bleu quand il a peur, et il
-  // clignote en blanc quand la peur va finir.
-  const GHOST_BODY = [
-    "....####....",
-    "..########..",
-    ".##########.",
-    ".##########.",
-    "############",
-    "############",
-    "############",
-    "############",
-    "############",
-    "############",
-  ];
-  const GHOST_SKIRT = [["############", "#.###..###.#"], ["############", ".###.##.###."]];
-  const ghosts = new Map();
-  function ghostImage(color, frame) {
-    const key = `${color}|${frame}`;
-    if (!ghosts.has(key)) {
-      const rows = [...GHOST_BODY, ...GHOST_SKIRT[frame]];
-      const c = document.createElement("canvas");
-      c.width = 14; c.height = 14;
-      const g = c.getContext("2d");
-      const paint = (ox, oy, fill) => {
-        g.fillStyle = fill;
-        rows.forEach((r, y) => [...r].forEach((ch, x) => { if (ch === "#") g.fillRect(x + ox, y + oy, 1, 1); }));
-      };
-      for (const [ox, oy] of [[0, 1], [2, 1], [1, 0], [1, 2]]) paint(ox, oy, "#1d1230");
-      paint(1, 1, color);
-      ghosts.set(key, c);
+  // --- Le rôdeur : un masque errant ---
+  // Un masque de bois sculpté qui flotte au-dessus de lambeaux d'ombre, deux
+  // yeux qui luisent. Apeuré, le masque se fend et pâlit, les yeux ne sont
+  // plus que deux points. Dessiné à la finesse des images (A pixels par
+  // unité), en deux images où les lambeaux ondulent, puis net au pixel près.
+  // (En attendant sa planche dessinée.)
+  const masks = new Map();
+  function maskImage(scared, blink, frame) {
+    const key = `${scared}|${blink}|${frame}`;
+    if (masks.has(key)) return masks.get(key);
+    const W = 12 * A, H = 15 * A, s = A / 2;
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const g = c.getContext("2d");
+    g.scale(s, s);
+    // Les lambeaux, sous le masque.
+    const o = frame ? 1.5 : -1.5;
+    g.fillStyle = scared ? "#3c4660" : "#2a1a3e";
+    g.beginPath();
+    g.moveTo(3, 12); g.lineTo(21, 12); g.lineTo(22, 20);
+    g.lineTo(19 + o, 29); g.lineTo(16, 23); g.lineTo(12 - o, 29); g.lineTo(9, 23); g.lineTo(5 + o, 29); g.lineTo(2, 20);
+    g.closePath();
+    g.fill();
+    // Le masque.
+    g.fillStyle = blink ? "#eef2ff" : scared ? "#a9b7c9" : "#c9a46a";
+    g.strokeStyle = "#1d1230";
+    g.lineWidth = 1.6;
+    g.beginPath();
+    g.ellipse(12, 10, 9, 8.6, 0, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    g.fillStyle = scared ? "#7d8aa0" : "#9a7444";
+    g.beginPath();
+    g.ellipse(14.5, 12, 5, 5.5, 0, -0.4, 1.8);
+    g.fill();
+    if (scared) {
+      // Une fêlure, et deux points pâles.
+      g.strokeStyle = "#38485c";
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(12, 1.5); g.lineTo(13.5, 4.5); g.lineTo(11.5, 7); g.lineTo(13, 10);
+      g.stroke();
+      g.fillStyle = "#38485c";
+      g.fillRect(7.5, 9, 2, 2);
+      g.fillRect(14.5, 9, 2, 2);
+    } else {
+      // Deux fentes qui luisent, une bouche sculptée, des stries au front.
+      g.fillStyle = "#1d1230";
+      g.fillRect(5.5, 8, 5.5, 3.2);
+      g.fillRect(13, 8, 5.5, 3.2);
+      g.fillStyle = "#ff6a2a";
+      g.fillRect(6.5, 8.8, 3.5, 1.8);
+      g.fillRect(14, 8.8, 3.5, 1.8);
+      g.fillStyle = "#ffd27a";
+      g.fillRect(7.5, 9.2, 1.5, 1);
+      g.fillRect(15, 9.2, 1.5, 1);
+      g.fillStyle = "#1d1230";
+      g.fillRect(9, 14, 6, 1.4);
+      g.fillStyle = "#7a5634";
+      g.fillRect(10, 3, 1, 3);
+      g.fillRect(13, 3, 1, 3);
     }
-    return ghosts.get(key);
+    // Net au pixel près : pas de demi-teintes sur les bords.
+    const im = g.getImageData(0, 0, W, H);
+    for (let i = 3; i < im.data.length; i += 4) im.data[i] = im.data[i] > 110 ? 255 : 0;
+    g.putImageData(im, 0, 0);
+    c.w = 12; c.h = 15;
+    masks.set(key, c);
+    return c;
   }
 
   function drawGhost(e) {
     const scared = e.frightened > 0;
     const blink = scared && e.frightened < 1.5 && Math.floor(clock * 8) % 2 === 0;
-    const color = !scared ? "#a35cf0" : blink ? "#e8ecff" : "#2c56e0";
-    const img = ghostImage(color, Math.floor(clock * 6) % 2);
-    const x = Math.round(e.x - 7), y = Math.round(e.y - 8);
+    const img = maskImage(scared, blink, Math.floor(clock * 5 + e.x * 0.05) % 2);
+    const lift = Math.sin(clock * 3 + e.x * 0.1) * 1.5;
     ctx.globalAlpha = e.wake > 0 ? 0.45 : 1;
     ctx.fillStyle = "rgba(30, 20, 50, 0.35)";
     ctx.beginPath();
     ctx.ellipse(e.x, e.y + 6, 5, 1.5, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.drawImage(img, x, y);
-    if (scared) {
-      // Apeuré : deux points pâles et une bouche en zigzag.
-      ctx.fillStyle = blink ? "#c0304a" : "#f4d0d8";
-      ctx.fillRect(x + 4, y + 5, 2, 2);
-      ctx.fillRect(x + 8, y + 5, 2, 2);
-      for (let k = 0; k < 4; k++) ctx.fillRect(x + 3 + k * 2, y + 9 + (k % 2), 2, 1);
-    } else {
-      // En chasse : de grands yeux qui regardent où il va.
-      const lx = e.look.x, ly = e.look.y;
-      for (const ox of [3, 8]) {
-        ctx.fillStyle = "#f4f6fa";
-        ctx.fillRect(x + ox, y + 4, 3, 4);
-        ctx.fillStyle = "#1e3a8a";
-        ctx.fillRect(x + ox + 1 + lx, y + 5 + ly, 2, 2);
-      }
-    }
+    // Tourné vers où il va.
+    drawSprite(img, Math.round(e.x - img.w / 2), Math.round(e.y - 11 + lift), e.look && e.look.x < 0);
     ctx.globalAlpha = 1;
   }
 

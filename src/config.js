@@ -113,6 +113,9 @@ const Config = Object.freeze({
   PROWLER_CHANCE_PER_DISTANCE: 0.06,
   PROWLER_CHANCE_MAX: 0.65,
   FRIGHT_TIME: 6,
+  PROWLER_SPEED_BASE: 0.78,
+  PROWLER_SPEED_PER_DEPTH: 0.012,
+  PROWLER_SPEED_MAX: 0.95,
 
   // Les étages. Chacun compte comme FLOOR_DEPTH écrans de distance de plus
   // pour la force des ennemis et les espèces qui apparaissent, ajoute
