@@ -23,17 +23,30 @@ const RECIPES = [
              area: [xs[frame] + 6, ys[row] + 6, xs[frame + 1] - 6, ys[row + 1] - (frame === 0 ? 30 : 6)] };
   })),
 
-  // La chevalière en 3D (essai) : 8 rangées de 14 images, une case de 55,8 ×
-  // 57 pixels. Rangées : face, marche de face, dos, marche de dos, gauche,
-  // marche à gauche, droite, marche à droite (on garde la droite : le jeu la
-  // retourne pour la gauche). Les cases diagonales du bas ne servent pas.
-  ...[["hero3d_front_idle", 0], ["hero3d_front", 1], ["hero3d_back_idle", 2], ["hero3d_back", 3],
-      ["hero3d_side_idle", 6], ["hero3d_side", 7]].flatMap(([out, row]) =>
-    Array.from({ length: 14 }, (_, frame) => {
-      const cw = (843 - 62) / 14, ch = 57;
-      return { src: "knight3d_sheet.webp", pick: "largest", frame, w: 20, h: 30, out, colors: 28,
-               area: [Math.round(62 + frame * cw) + 2, 6 + row * ch + 2, Math.round(62 + (frame + 1) * cw) - 2, 6 + (row + 1) * ch - 2] };
-    })),
+  // La chevalière en 3D : une grande planche à fond blanc et lignes de grille
+  // grises, 13 rangées (face, dos, profil : immobile 4, marche 9, attaque 6,
+  // coup reçu 2 ; puis la chute, 5). Les cases n'ont pas toutes la même
+  // largeur : leurs bords sont relevés à la main (l'épée et ses traînées
+  // masquent certaines lignes). Toutes les bandes partagent la même échelle
+  // (`scale`), pour que la chevalière garde sa taille d'une animation à
+  // l'autre ; l'attaque et la chute ont des cases plus larges.
+  ...(() => {
+    const IDLE = [1, 148, 291, 433, 577], WALK = [1, 148, 265, 383, 490, 594, 702, 825, 956, 1084];
+    const rows = [
+      ["hero3d_front_idle", 1, 110, IDLE], ["hero3d_front", 110, 220, WALK],
+      ["hero3d_front_attack", 220, 335, [1, 213, 395, 566, 718, 876, 1084]], ["hero3d_front_hurt", 335, 450, [1, 201, 392]],
+      ["hero3d_back_idle", 455, 568, IDLE], ["hero3d_back", 568, 690, WALK],
+      ["hero3d_back_attack", 690, 814, [1, 215, 399, 566, 718, 876, 1084]], ["hero3d_back_hurt", 814, 928, [1, 206, 390]],
+      ["hero3d_side_idle", 933, 1046, IDLE], ["hero3d_side", 1046, 1155, WALK],
+      ["hero3d_side_attack", 1155, 1271, [1, 220, 400, 595, 718, 876, 1084]], ["hero3d_side_hurt", 1271, 1370, [1, 191, 374]],
+      ["hero3d_death", 1370, 1446, [1, 194, 396, 628, 847, 1084]],
+    ];
+    return rows.flatMap(([out, y0, y1, xs]) => xs.slice(0, -1).map((x, frame) => {
+      const wide = /attack|death/.test(out);
+      return { src: "knight3d_full_sheet.png", pick: "largest", frame, w: wide ? 56 : 24, h: 32, out, colors: 32,
+               scale: 0.3, area: [x + 4, y0 + 4, xs[frame + 1] - 4, y1 - 4] };
+    }));
+  })(),
 
   // Les esprits compagnons : 10 rangées de 3 images de flottement, sur fond
   // vert dans un cadre sombre. Les étincelles relient parfois deux rangées :
@@ -129,4 +142,8 @@ const RECIPES = [
 // Les tailles ci-dessus sont en unités de zone ; les images sont fabriquées
 // avec ART_SCALE pixels de dessin par unité (la même valeur que Config.ART).
 const ART_SCALE = 2;
-for (const r of RECIPES) { r.w *= ART_SCALE; r.h *= ART_SCALE; }
+for (const r of RECIPES) {
+  r.w *= ART_SCALE;
+  r.h *= ART_SCALE;
+  if (r.scale) r.scale *= ART_SCALE;
+}

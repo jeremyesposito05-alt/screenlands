@@ -316,7 +316,9 @@ async function build() {
     const strip = list.length > 1 || r.frame !== undefined;
     const pixels = list.flatMap((j) => figurePixels(j.img, j.bg, j.fig));
     const pal = r.palette === "hero" ? parsePalette($("palette").value) : medianCut(pixels, r.colors || 16);
-    const scale = strip ? Math.min(...list.map((j) => Math.min(r.w / (j.fig.x1 - j.fig.x0), r.h / (j.fig.y1 - j.fig.y0)))) : undefined;
+    // `scale` : pixels de dessin par pixel de planche, imposé (plusieurs bandes
+    // d'un même personnage), sinon le plus grand qui fait tout tenir.
+    const scale = r.scale || (strip ? Math.min(...list.map((j) => Math.min(r.w / (j.fig.x1 - j.fig.x0), r.h / (j.fig.y1 - j.fig.y0)))) : undefined);
     let small;
     if (strip) {
       list.sort((a, b) => a.r.frame - b.r.frame);

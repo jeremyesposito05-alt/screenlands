@@ -135,14 +135,18 @@ const Render = (() => {
     if (state.hunter) actors.push({ y: state.hunter.y + 7, draw: () => drawHunter(state.hunter) });
     for (const a of state.run.allies) actors.push({ y: a.y + 4, draw: () => drawAlly(a.type, a.x, a.y, 1, a.level) });
     if (state.wildSpirit) actors.push({ y: state.wildSpirit.y + 4, draw: () => drawWildSpirit(state.wildSpirit) });
-    if (state.phase !== "dead") actors.push({ y: player.y + player.size / 2, draw: () => drawPlayer(player, dt) });
+    // Mort : seule la chevalière 3D a une chute à montrer.
+    if (state.phase !== "dead" || (Save.data.heroStyle === "3d" && Sprites.get("hero3d_death"))) {
+      actors.push({ y: player.y + player.size / 2, draw: () => drawPlayer(player, dt, state.phase === "dead") });
+    }
     actors.sort((a, b) => a.y - b.y);
     for (const a of actors) a.draw();
 
     if (state.phase !== "dead") drawPlayerFx(state);
     drawAllyAttacks(state);
     drawSpiritFx(state);
-    if (state.swing) drawSwing(state.swing, player);
+    // La chevalière 3D a sa propre traînée d'épée dans ses images.
+    if (state.swing && !(Save.data.heroStyle === "3d" && Sprites.get("hero3d_side_attack"))) drawSwing(state.swing, player);
     for (const s of state.projectiles) drawProjectile(s);
     drawEnemyShots(state);
 
@@ -550,6 +554,9 @@ const Render = (() => {
   const SHAKE_TIME = 0.25, HURT_FLASH = 0.35;
   const SHAKES = { hurt: 3, allyDown: 2, explode: 3.5, killBig: 1.5, victory: 3, death: 4, seal: 4 };
   let shake = 0, shakeAmp = 0, hurtFlash = 0;
+  // L'animation ponctuelle en cours du héros : {kind, t} ou null.
+  let heroAnim = null;
+  const HERO_ANIM_TIME = { attack: 0.36, hurt: 0.3, death: 0.9 };
   function react(events) {
     for (const e of events) {
       const a = SHAKES[e.type];
@@ -558,6 +565,11 @@ const Render = (() => {
         shake = SHAKE_TIME;
       }
       if (e.type === "hurt" || e.type === "death") hurtFlash = HURT_FLASH;
+      // Les animations du héros qui suivent un événement : frapper (toutes les
+      // armes), encaisser, tomber.
+      if (["swing", "thrust", "shoot", "throw"].includes(e.type)) heroAnim = { kind: "attack", t: 0 };
+      if (e.type === "hurt") heroAnim = { kind: "hurt", t: 0 };
+      if (e.type === "death") heroAnim = { kind: "death", t: 0 };
     }
   }
 
@@ -1590,22 +1602,34 @@ const Render = (() => {
   // « En marche » tient un instant après le dernier pas : sur un écran à
   // 120 Hz, certaines images tombent entre deux pas de physique.
   const lastStep = { x: 0, y: 0, moving: false, linger: 0 };
-  function drawPlayer(p, dt = 0) {
+  function drawPlayer(p, dt = 0, dead = false) {
+    if (heroAnim) {
+      if (!dead && heroAnim.kind === "death") heroAnim = null;
+    }
+    if (heroAnim) {
+      heroAnim.t += dt;
+      if (heroAnim.kind !== "death" && heroAnim.t > HERO_ANIM_TIME[heroAnim.kind]) heroAnim = null;
+    }
     if (dt > 0) {
       if (Math.hypot(p.x - lastStep.x, p.y - lastStep.y) > 0.05) lastStep.linger = 0.1;
       else lastStep.linger = Math.max(0, lastStep.linger - dt);
       lastStep.moving = lastStep.linger > 0;
       lastStep.x = p.x; lastStep.y = p.y;
     }
-    // Clignote tant qu'il est intouchable après un coup.
-    if (p.invuln > 0 && Math.floor(clock * 12) % 2 === 0) return;
-    const f = p.facing;
+    // Clignote tant qu'il est intouchable après un coup (pas pendant qu'il
+    // encaisse : on doit voir l'animation).
+    const busy = heroAnim && heroAnim.kind === "hurt";
+    if (!dead && !busy && p.invuln > 0 && Math.floor(clock * 12) % 2 === 0) return;
+    const f = dead ? { x: 0, y: 1 } : p.facing;
     // La vue, puis le jeu d'images : la chevalière pixel, ou en 3D si elle est
     // choisie au menu. La 3D a aussi une animation immobile (la respiration).
     const view = f.y < 0 && !f.x ? "back" : f.x ? "side" : "front";
     const set = Save.data.heroStyle === "3d" && Sprites.get(`hero3d_${view}`) ? "hero3d" : "hero";
     const idle = !lastStep.moving && Sprites.get(`${set}_${view}_idle`);
-    const name = idle ? `${set}_${view}_idle` : `${set}_${view}`;
+    // Une animation ponctuelle passe avant la marche, si ce jeu d'images l'a.
+    const special = dead ? "hero3d_death"
+      : heroAnim && heroAnim.kind !== "death" ? `${set}_${view}_${heroAnim.kind}` : null;
+    const name = special && Sprites.get(special) ? special : idle ? `${set}_${view}_idle` : `${set}_${view}`;
     const img = Sprites.get(name);
     if (img) {
       // Pour qu'on le retrouve d'un coup d'œil : une flaque de lumière
@@ -1627,7 +1651,11 @@ const Render = (() => {
       // l'arrêt ; 4 images : dans l'ordre ; 3 : immobile, A, immobile, B.
       const fps = count >= 8 ? (idle ? 8 : 18) : 8;
       const step = Math.floor(clock * fps) % Math.max(4, count);
-      const frame = count >= 4 ? (lastStep.moving || idle ? step : 0)
+      // Une animation ponctuelle se joue une fois, sur sa durée ; la chute
+      // reste sur sa dernière image.
+      const once = name === special && heroAnim;
+      const frame = once ? Math.min(count - 1, Math.floor((heroAnim.t / HERO_ANIM_TIME[heroAnim.kind]) * count))
+        : count >= 4 ? (lastStep.moving || idle ? step : 0)
         : !lastStep.moving || count < 3 ? 0 : WALK[step % 4];
       const bob = lastStep.moving && count < 3 && step % 2 ? 1 : 0;
       const x = Math.round(p.x - fw / 2), y = Math.round(feet - img.h + 1 - bob);
