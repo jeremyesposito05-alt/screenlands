@@ -120,8 +120,14 @@ graphismes.
   fouette devant (puis derrière, puis ramène les gemmes), Braise lance des
   boules de feu qui poursuivent (puis explosent, puis par trois). Chacun
   éclaire de sa couleur. Places : 4 en facile, 3 en normal, 2 en difficile,
-  plus l'Étendard du roi et le Lien spirituel de l'atelier. Sept autres
-  esprits sont dessinés et attendent leur pouvoir (`src/allies.js`).
+  plus l'Étendard du roi et le Lien spirituel de l'atelier. Les sept
+  autres : Pétard (bombes à la Bomberman, en croix arrêtées par les murs),
+  Givre (onde qui ralentit, puis gèle), Orage (éclair qui rebondit), Égide
+  (bouclier qui tourne et arrête les tirs, puis les renvoie), Gloutonne (gobe
+  gemmes et petits ennemis, puis les rôdeurs), Ombre (leurre que les ennemis
+  poursuivent), Rosée (relève les esprits tombés, puis rend des cœurs). Ils
+  apparaissent d'abord aux étages profonds, puis partout une fois rencontrés
+  (`src/allies.js`).
 - **Trois cœurs**, qui ne comptent que quand il n'y a plus de compagnon. On
   garde son équipement tant qu'on est en vie. Mourir fait perdre le butin
   porté et tout l'équipement, et ramène au camp de base sur une nouvelle
@@ -150,6 +156,12 @@ graphismes.
   coffre-fort, coffres en plus, équipement de départ, et une lame réservée au
   mode difficile). Tout peut être remboursé d'un coup pour essayer
   autre chose. Les prix sont dans `src/upgrades.js`.
+  **L'atelier se dévoile** : un rang (de 1 à 10) monte avec tout ce qui a été
+  mis à l'abri depuis le début ; il ouvre des lignes et des niveaux. D'autres
+  lignes s'ouvrent par des découvertes (descendre au 2e étage, battre un
+  Gardien, survivre au Chasseur, se reposer à 3 camps, rencontrer des
+  esprits…). Les lignes fermées s'affichent « ??? » avec leur indice, et le
+  menu annonce les nouveautés.
 - **Une mini-carte** en haut à droite : camp de base, écrans visités et leurs
   portes, écrans entrevus derrière, camp s'il a été vu, coffres non ouverts,
   position.

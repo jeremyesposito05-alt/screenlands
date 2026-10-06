@@ -139,6 +139,7 @@ const Render = (() => {
 
     if (state.phase !== "dead") drawPlayerFx(state);
     drawAllyAttacks(state);
+    drawSpiritFx(state);
     if (state.swing) drawSwing(state.swing, player);
     for (const s of state.projectiles) drawProjectile(s);
     drawEnemyShots(state);
@@ -870,6 +871,79 @@ const Render = (() => {
     text(b.title, x + 5, y + 2, b.color, "left", 7);
     lines.forEach((l, i) => text(l, x + 5, y + 10 + i * 7, "#e8e4f2", "left", 6));
     ctx.globalAlpha = 1;
+  }
+
+  // Les effets des nouveaux esprits : bombes et croix d'explosion (Pétard),
+  // ondes (Givre), éclairs (Orage), leurre (Ombre).
+  function drawSpiritFx(state) {
+    for (const b of state.bombs || []) {
+      // Une petite bombe ronde dont la mèche crépite, de plus en plus vite.
+      const blink = Math.floor(clock * (6 + 20 * (1 - b.fuse / 1.4))) % 2;
+      ctx.fillStyle = "rgba(30, 20, 50, 0.35)";
+      ctx.beginPath();
+      ctx.ellipse(b.x, b.y + 4, 4, 1.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = blink ? "#ff7a5c" : "#c8323a";
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#1d1230";
+      ctx.fillRect(b.x - 0.5, b.y - 6, 1, 2);
+      ctx.fillStyle = "#ffe27a";
+      ctx.fillRect(b.x - 1, b.y - 7.5, 2, 2);
+    }
+    for (const c of state.crosses || []) {
+      const k = c.life / 0.4;
+      for (const cell of c.cells) {
+        ctx.fillStyle = `rgba(255, 140, 50, ${0.55 * k})`;
+        ctx.fillRect(cell.x - 7, cell.y - 7, 14, 14);
+        ctx.fillStyle = `rgba(255, 236, 160, ${0.8 * k})`;
+        ctx.fillRect(cell.x - 3, cell.y - 3, 6, 6);
+      }
+    }
+    for (const w of state.waves || []) {
+      const t = 1 - w.life / w.max;
+      ctx.strokeStyle = w.color;
+      ctx.globalAlpha = 0.8 * (1 - t);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(w.x, w.y, w.r * (0.3 + 0.7 * t), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    for (const b of state.bolts || []) {
+      // Un trait en zigzag d'un point au suivant.
+      ctx.strokeStyle = "#fff6b0";
+      ctx.globalAlpha = Math.min(1, b.life / 0.1);
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      b.pts.forEach((p, i) => {
+        if (!i) { ctx.moveTo(p.x, p.y); return; }
+        const q = b.pts[i - 1];
+        for (let s = 1; s <= 4; s++) {
+          const t = s / 4, j = s < 4 ? (Math.random() - 0.5) * 6 : 0;
+          ctx.lineTo(q.x + (p.x - q.x) * t + j, q.y + (p.y - q.y) * t + j);
+        }
+      });
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    const d = state.decoy;
+    if (d) {
+      // Une silhouette d'ombre qui tremble, de plus en plus pâle.
+      const img = Sprites.get("hero_front");
+      ctx.globalAlpha = 0.35 + 0.25 * Math.sin(clock * 12);
+      if (img) {
+        const fa = Sprites.frameWidth("hero_front");
+        ctx.drawImage(Sprites.white("hero_front") || img, 0, 0, fa, img.height, Math.round(d.x - fa / A / 2), Math.round(d.y + 6 - img.h), fa / A, img.h);
+      }
+      ctx.fillStyle = "#9a6bd8";
+      ctx.globalAlpha *= 0.6;
+      ctx.beginPath();
+      ctx.ellipse(d.x, d.y, 8, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
   }
 
   function drawAllyAttacks(state) {

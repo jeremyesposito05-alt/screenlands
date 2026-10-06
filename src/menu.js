@@ -93,7 +93,9 @@ const Menu = (() => {
     switch (action) {
       case "play": Save.clearNotice(); return start(false);
       case "sandbox": return start(true);
-      case "shop": return open("shop");
+      case "shop":
+        Save.markSeen(Upgrades.newUnlocks());
+        return open("shop");
       case "heroStyle":
         Save.setHeroStyle(Save.data.heroStyle === "3d" ? "pixel" : "3d");
         break;
@@ -176,29 +178,46 @@ const Menu = (() => {
 
   function mainScreen() {
     const d = Save.data;
+    const fresh = Upgrades.newUnlocks();
     return `
       <h1>LabyRun</h1>
       <p class="sub">survivor</p>
       ${d.refundNotice ? `<p class="note gold">L'atelier a changé : tes ${d.refundNotice} 💎 d'achats t'ont été rendus.</p>` : ""}
+      ${fresh.length ? `<p class="note gold">Nouveau à l'atelier : ${fresh.map((k) => Upgrades.LIST[k].name).join(", ")}</p>` : ""}
       <div class="stack">
         ${btn("play", "Jouer", "", "big primary")}
         ${btn("mode", `Mode : ${Config.MODES[d.mode].name}`, "", d.mode === "hard" ? "danger" : "")}
         <p class="note dim" style="margin:0">${MODE_HELP[d.mode]}</p>
-        ${btn("shop", `Atelier · ${d.bank} 💎`, "", "big")}
+        ${btn("shop", `Atelier · ${d.bank} 💎${fresh.length ? " · nouveau !" : ""}`, "", "big")}
         ${btn("sandbox", "Bac à sable", "", "big")}
         ${btn("heroStyle", `Héroïne : ${d.heroStyle === "3d" ? "3D" : "pixel"}`)}
         ${btn("controls", `Commandes : ${MODES[Input.mode].label}`)}
         ${audioButtons()}
       </div>
-      <p class="note">Banque ${d.bank} · meilleur butin ${d.best}</p>
+      <p class="note">Banque ${d.bank} · meilleur butin ${d.best} · rang ${Upgrades.rank()}</p>
       <p class="note dim">Le bac à sable permet de tout essayer : armes, pouvoirs, ennemis, menace. Ce qu'on y gagne ne va pas à la banque.</p>`;
   }
 
   // L'atelier : une ligne par amélioration, ses niveaux en pastilles, et le
   // prix du suivant. Un achat trop cher reste visible, grisé : on sait ce
   // qu'on vise.
+  // Le rang et ce qu'il manque pour le suivant.
+  function rankLine() {
+    const r = Upgrades.rank(), next = Upgrades.nextRank(), t = Upgrades.totalBanked();
+    return next === null ? `Rang ${r} (maximum) · ${t} 💎 mis à l'abri en tout`
+      : `Rang ${r} · ${t} / ${next} 💎 mis à l'abri en tout pour le rang ${r + 1}`;
+  }
+
   function shopScreen() {
-    const rows = Object.entries(Upgrades.LIST).map(([key, u]) => {
+    // Ce qui est encore fermé reste caché : « ??? » et ce qu'il faut faire pour
+    // l'ouvrir. Les lignes ouvertes d'abord, puis les fermées.
+    const keys = Object.keys(Upgrades.LIST);
+    const order = [...keys.filter((k) => Upgrades.unlocked(k)), ...keys.filter((k) => !Upgrades.unlocked(k))];
+    const rows = order.map((key) => {
+      const u = Upgrades.LIST[key];
+      if (!Upgrades.unlocked(key)) {
+        return `<div class="row upgrade locked"><span><b>???</b><br><small>🔒 ${Upgrades.unlockHint(key)}</small></span></div>`;
+      }
       const n = Upgrades.level(key), price = Upgrades.cost(key);
       const pips = Array.from({ length: u.max }, (_, i) => `<i class="${i < n ? "on" : ""}"></i>`).join("");
       const hint = Upgrades.locked(key)
@@ -206,6 +225,7 @@ const Menu = (() => {
         : u.hint;
       const action = price === null
         ? `<button type="button" class="small" disabled>max</button>`
+        : Upgrades.capped(key) ? `<button type="button" class="small" disabled>rang ${Upgrades.rank() + 1}</button>`
         : btn("buy", `${price} 💎`, `data-key="${key}"${Upgrades.affordable(key) ? "" : " disabled"}`, "small");
       return `<div class="row upgrade"><span><b>${u.name}</b> <em class="pips">${pips}</em><br><small>${hint}</small></span>${action}</div>`;
     }).join("");
@@ -216,6 +236,7 @@ const Menu = (() => {
         ${btn("back", "Retour", "", "primary")}
       </div>
       <p class="note">Banque <b class="gold">${Save.data.bank} 💎</b> · pour toutes les expéditions à venir</p>
+      <p class="note dim">${rankLine()}</p>
       <section>${rows}</section>
       <div class="stack foot">${spent ? btn("refund", confirmRefund ? `Confirmer : rendre ${spent} 💎` : "Tout rembourser", "", confirmRefund ? "danger" : "") : ""}</div>`;
   }

@@ -22,7 +22,12 @@ const Save = (() => {
   const data = { bank: 0, best: 0, controls: "swipe", upgrades: {}, sound: true, music: true,
                  mode: "normal", hardBanked: 0, shopVersion: 2, refundNotice: 0,
                  // `heroStyle` : la chevalière en pixel art ("pixel") ou en 3D ("3d").
-                 heroStyle: "pixel" };
+                 heroStyle: "pixel",
+                 // Le carnet de découvertes : esprits rencontrés, exploits (`flags`) et
+                 // compteurs ; `totalBanked` : tout ce qui a été mis à l'abri depuis le
+                 // début, même dépensé, qui fait le rang ; `seenUnlocks` : les lignes de
+                 // l'atelier déjà annoncées.
+                 found: { spirits: [], flags: {}, counts: {} }, totalBanked: null, seenUnlocks: null };
 
   let saved = null;
   try {
@@ -62,6 +67,7 @@ const Save = (() => {
       data.bank += amount;
       data.best = Math.max(data.best, amount);
       if (mode === "hard") data.hardBanked += amount;
+      data.totalBanked = (data.totalBanked || 0) + amount;
       write();
     },
     clearNotice() {
@@ -70,6 +76,35 @@ const Save = (() => {
     },
     setHeroStyle(style) {
       data.heroStyle = style;
+      write();
+    },
+    // --- Le carnet de découvertes ---
+    discover(flag) {
+      if (data.found.flags[flag]) return false;
+      data.found.flags[flag] = true;
+      write();
+      return true;
+    },
+    count(name, n = 1) {
+      data.found.counts[name] = (data.found.counts[name] || 0) + n;
+      write();
+      return data.found.counts[name];
+    },
+    meetSpirit(type) {
+      if (data.found.spirits.includes(type)) return false;
+      data.found.spirits.push(type);
+      write();
+      return true;
+    },
+    markSeen(keys) {
+      data.seenUnlocks = [...new Set([...(data.seenUnlocks || []), ...keys])];
+      write();
+    },
+    // Première ouverture avec le carnet : le total mis à l'abri est estimé
+    // (banque + achats), et ce qui est déjà ouvert ne sera pas annoncé.
+    initProgress(total, unlocked) {
+      if (data.totalBanked === null) data.totalBanked = total;
+      if (data.seenUnlocks === null) data.seenUnlocks = unlocked;
       write();
     },
     setMode(mode) {

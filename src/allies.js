@@ -52,22 +52,82 @@ const Allies = (() => {
       levels: [{ cooldown: 1.4, damage: 1.5, balls: 1 }, { cooldown: 1.3, damage: 1.6, balls: 1, blast: 22 },
                { cooldown: 1.2, damage: 1.8, balls: 3, blast: 26 }],
     },
-    petard: { name: "Pétard", color: "#ff4a4a", says: "Je suis l'esprit du Pétard. Boum." },
-    givre: { name: "Givre", color: "#8fd8ff", says: "Je suis l'esprit du Givre." },
-    orage: { name: "Orage", color: "#ffe26b", says: "Je suis l'esprit de l'Orage." },
-    egide: { name: "Égide", color: "#f4f0ff", says: "Je suis l'esprit de l'Égide." },
-    gloutonne: { name: "Gloutonne", color: "#ffd23f", says: "Je suis Gloutonne. J'ai faim." },
-    ombre: { name: "Ombre", color: "#9a6bd8", says: "Je suis l'esprit de l'Ombre." },
-    rosee: { name: "Rosée", color: "#ff8fd0", says: "Je suis l'esprit de la Rosée." },
+    // Pétard : des bombes à la Bomberman, qui explosent en croix le long des
+    // cases, arrêtées par les murs. Évoluées, elles se déclenchent entre elles.
+    petard: {
+      name: "Pétard", color: "#ff4a4a", evolved: "Chaîne",
+      says: "Je suis l'esprit du Pétard. Écarte-toi quand ça fume !",
+      attack: "bomb",
+      levels: [{ cooldown: 2.4, damage: 2, length: 2, bombs: 1 }, { cooldown: 2.2, damage: 2.2, length: 3, bombs: 1 },
+               { cooldown: 2, damage: 2.5, length: 4, bombs: 2, chain: true }],
+    },
+    // Givre : une onde qui ralentit tout autour du joueur ; évoluée, elle gèle.
+    givre: {
+      name: "Givre", color: "#8fd8ff", evolved: "Blizzard",
+      says: "Je suis l'esprit du Givre. Rien ne te rattrapera.",
+      attack: "frost",
+      levels: [{ cooldown: 2.6, radius: 38, slow: 1.6 }, { cooldown: 2.4, radius: 52, slow: 2 },
+               { cooldown: 2.2, radius: 60, slow: 2, freeze: 1, damage: 0.5 }],
+    },
+    // Orage : un éclair qui saute d'un ennemi à l'autre.
+    orage: {
+      name: "Orage", color: "#ffe26b", evolved: "Tempête",
+      says: "Je suis l'esprit de l'Orage. Que le ciel gronde !",
+      attack: "bolt", range: 130, hop: 64,
+      levels: [{ cooldown: 1.6, damage: 1.2, jumps: 1 }, { cooldown: 1.5, damage: 1.2, jumps: 3 },
+               { cooldown: 1.3, damage: 1.4, jumps: 6, stun: 0.4 }],
+    },
+    // Égide : elle quitte la file et tourne autour du joueur ; elle arrête les
+    // tirs, puis repousse ce qui la touche, puis renvoie les tirs.
+    egide: {
+      name: "Égide", color: "#f4f0ff", evolved: "Miroir", orbit: true,
+      says: "Je suis l'esprit de l'Égide. Je serai ton bouclier.",
+      attack: "guard",
+      levels: [{ radius: 16, spin: 3 }, { radius: 17, spin: 3.4, damage: 0.8 }, { radius: 18, spin: 3.8, damage: 1, reflect: true }],
+    },
+    // Gloutonne : elle gobe les gemmes à portée, et les ennemis assez faibles ;
+    // évoluée, même les rôdeurs.
+    gloutonne: {
+      name: "Gloutonne", color: "#ffd23f", evolved: "Dévoreuse",
+      says: "Je suis Gloutonne. J'ai faim, tellement faim…",
+      attack: "gobble",
+      levels: [{ cooldown: 1.6, pull: 36, eats: 1 }, { cooldown: 1.4, pull: 46, eats: 3 },
+               { cooldown: 1.2, pull: 60, eats: 6, prowlers: true }],
+    },
+    // Ombre : un leurre que les ennemis poursuivent à la place du joueur ;
+    // évolué, il explose à la fin.
+    ombre: {
+      name: "Ombre", color: "#9a6bd8", evolved: "Double",
+      says: "Je suis l'esprit de l'Ombre. Qu'ils me suivent, moi.",
+      attack: "decoy",
+      levels: [{ cooldown: 8, time: 3 }, { cooldown: 7, time: 4.5 }, { cooldown: 6, time: 4.5, blast: 34, damage: 2 }],
+    },
+    // Rosée : elle relève toute seule les esprits tombés, puis rend des cœurs.
+    rosee: {
+      name: "Rosée", color: "#ff8fd0", evolved: "Source",
+      says: "Je suis l'esprit de la Rosée. Je panserai tes blessures.",
+      attack: "heal",
+      levels: [{ revive: 2 }, { revive: 1.5, heal: 90 }, { revive: 0.5, heal: 45 }],
+    },
   };
-  // Ceux qu'on peut rencontrer aujourd'hui.
+  // Tous ceux qui ont un pouvoir.
   const POOL = Object.keys(TYPES).filter((k) => TYPES[k].attack);
+  // Où on les rencontre : les trois premiers partout ; les suivants d'abord
+  // aux étages profonds (à partir de l'étage `TIER`), puis partout une fois
+  // rencontrés (le carnet de Save). Gloutonne ne vient qu'à qui a attrapé
+  // 5 rôdeurs.
+  const TIER = { sylve: 1, liane: 1, braise: 1, petard: 2, givre: 2, orage: 2, egide: 3, ombre: 3, rosee: 3, gloutonne: 2 };
+  function canMeet(type, floor) {
+    if (type === "gloutonne" && !Save.data.found.flags.prowlers5) return false;
+    return floor >= TIER[type] || Save.data.found.spirits.includes(type);
+  }
 
   const PER = SPACING / STEP;
   const stats = (a) => TYPES[a.type].levels[a.level - 1];
 
   // L'état propre à la zone : la trajectoire, les esprits tombés, et leurs
-  // attaques en cours (flèches, coups de fouet, boules de feu).
+  // attaques en cours : flèches, coups de fouet, boules de feu, bombes et
+  // leurs croix d'explosion, ondes de givre, éclairs, et le leurre de l'Ombre.
   function clearZone(state) {
     const p = state.player;
     state.trail = Array.from({ length: LONGEST * PER + 2 }, () => ({ x: p.x, y: p.y }));
@@ -75,6 +135,11 @@ const Allies = (() => {
     state.allyShots = [];
     state.whips = [];
     state.fireballs = [];
+    state.bombs = [];
+    state.crosses = [];
+    state.waves = [];
+    state.bolts = [];
+    state.decoy = null;
     for (const a of state.run.allies) {
       a.x = p.x;
       a.y = p.y;
@@ -129,11 +194,21 @@ const Allies = (() => {
     }
     const keep = LONGEST * PER + 2;
     if (t.length > keep) t.splice(0, t.length - keep);
-    state.run.allies.forEach((a, i) => {
+    // L'Égide ne prend pas de place dans la file : elle tourne autour du joueur.
+    let i = 0;
+    for (const a of state.run.allies) {
+      const ty = TYPES[a.type];
+      if (ty.orbit) {
+        a.angle = (a.angle || 0);
+        a.x = p.x + Math.cos(a.angle) * stats(a).radius;
+        a.y = p.y + 4 + Math.sin(a.angle) * stats(a).radius * 0.7;
+        continue;
+      }
       const pt = t[Math.max(0, t.length - 1 - (i + 1) * PER)];
       a.x = pt.x;
       a.y = pt.y;
-    });
+      i++;
+    }
   }
 
   function update(state, dt, st, api) {
@@ -144,11 +219,23 @@ const Allies = (() => {
       const kind = TYPES[a.type].attack;
       const done = kind === "arrows" ? shoot(state, a, st)
         : kind === "whip" ? lash(state, a, st, api)
-        : kind === "fire" ? throwFire(state, a, st) : false;
+        : kind === "fire" ? throwFire(state, a, st)
+        : kind === "bomb" ? dropBomb(state, a, st)
+        : kind === "frost" ? chill(state, a, st, api)
+        : kind === "bolt" ? strike(state, a, st, api)
+        : kind === "gobble" ? gobble(state, a, api)
+        : kind === "decoy" ? lure(state, a) : false;
       if (done) a.cooldown = stats(a).cooldown * st.cooldown;
     }
     updateShots(state, dt, api);
     updateFire(state, dt, api);
+    updateBombs(state, dt, st, api);
+    updateGuards(state, dt, st, api);
+    updateDecoy(state, dt, api);
+    heal(state, dt);
+    state.crosses = state.crosses.filter((c) => (c.life -= dt) > 0);
+    state.bolts = state.bolts.filter((b) => (b.life -= dt) > 0);
+    state.waves = state.waves.filter((w) => (w.life -= dt) > 0);
     state.whips = state.whips.filter((w) => (w.life -= dt) > 0);
     updateDowned(state, dt);
   }
@@ -271,6 +358,193 @@ const Allies = (() => {
     });
   }
 
+  // --- Pétard : des bombes à la Bomberman ---
+  // La bombe est posée au centre de la case de l'esprit ; à la fin de sa
+  // mèche, elle explose en croix, case par case, jusqu'à `length` cases ou au
+  // premier mur. Elle ne blesse que les ennemis. Évoluées, les bombes prises
+  // dans une croix explosent aussitôt.
+  const T = Config.TILE;
+  const FUSE = 1.4;
+  function dropBomb(state, a, st) {
+    const s = stats(a);
+    if (!state.enemies.some((e) => e.hp > 0 && e.type !== "prowler")) return false;
+    if (state.bombs.filter((b) => b.owner === a).length >= s.bombs) return false;
+    const x = Math.floor(a.x / T) * T + T / 2, y = Math.floor(a.y / T) * T + T / 2;
+    if (state.bombs.some((b) => b.x === x && b.y === y)) return false;
+    state.bombs.push({ owner: a, x, y, fuse: FUSE, length: s.length, damage: s.damage * st.damage, chain: !!s.chain });
+    return true;
+  }
+
+  function solidAt(state, x, y) {
+    return x < 0 || y < 0 || x > Config.ZONE_W || y > Config.ZONE_H ||
+      state.solids.some((r) => Physics.overlapsRect({ x, y, size: 6 }, r));
+  }
+
+  function explode(state, b, api) {
+    const cells = [{ x: b.x, y: b.y }];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      for (let k = 1; k <= b.length; k++) {
+        const x = b.x + dx * k * T, y = b.y + dy * k * T;
+        if (solidAt(state, x, y)) break;
+        cells.push({ x, y });
+      }
+    }
+    state.crosses.push({ cells, life: 0.4 });
+    if (state.events) state.events.push({ type: "explode", x: b.x, y: b.y });
+    const inCross = (o) => cells.some((c) => Math.abs(o.x - c.x) < T / 2 + o.size / 2 && Math.abs(o.y - c.y) < T / 2 + o.size / 2);
+    for (const e of [...state.enemies]) if (e.hp > 0 && inCross(e)) api.damage(e, b.damage, null, 0);
+    if (b.chain) for (const o of state.bombs) if (o !== b && o.fuse > 0 && inCross({ x: o.x, y: o.y, size: 4 })) o.fuse = 0.05;
+  }
+
+  function updateBombs(state, dt, st, api) {
+    const ready = [];
+    for (const b of state.bombs) if ((b.fuse -= dt) <= 0) ready.push(b);
+    if (!ready.length) return;
+    state.bombs = state.bombs.filter((b) => !ready.includes(b));
+    for (const b of ready) explode(state, b, api);
+  }
+
+  // --- Givre : une onde qui ralentit, puis qui gèle ---
+  function chill(state, a, st, api) {
+    const s = stats(a), p = state.player, r = s.radius * st.area;
+    const near = state.enemies.filter((e) => e.hp > 0 && Math.hypot(e.x - p.x, e.y - p.y) < r + e.size / 2);
+    if (!near.length) return false;
+    state.waves.push({ x: p.x, y: p.y, r, life: 0.45, max: 0.45, color: TYPES.givre.color });
+    for (const e of near) {
+      e.slow = Math.max(e.slow || 0, s.slow);
+      if (s.freeze && e.type !== "hunter") Enemies.stun(e, s.freeze);
+      if (s.damage) api.damage(e, s.damage * st.damage, null, 0);
+    }
+    return true;
+  }
+
+  // --- Orage : un éclair qui saute d'ennemi en ennemi ---
+  function strike(state, a, st, api) {
+    const t = TYPES.orage, s = stats(a);
+    let from = { x: a.x, y: a.y - 9 }, target = nearest(state, a, t.range * st.area);
+    if (!target) return false;
+    const hit = new Set(), pts = [from];
+    for (let k = 0; k < s.jumps && target; k++) {
+      hit.add(target);
+      pts.push({ x: target.x, y: target.y });
+      api.damage(target, s.damage * st.damage, null, 0);
+      if (s.stun && target.hp > 0) Enemies.stun(target, s.stun);
+      from = target;
+      let best = null, bd = t.hop;
+      for (const e of state.enemies) {
+        if (e.hp <= 0 || hit.has(e) || e.type === "prowler") continue;
+        const d = Math.hypot(e.x - from.x, e.y - from.y);
+        if (d < bd) { bd = d; best = e; }
+      }
+      target = best;
+    }
+    state.bolts.push({ pts, life: 0.18 });
+    return true;
+  }
+
+  // --- Égide : le bouclier qui tourne ---
+  // Elle arrête les tirs qui la touchent ; dès le niveau 2, elle frappe ce
+  // qu'elle heurte ; évoluée, elle renvoie les tirs vers l'ennemi le plus
+  // proche.
+  function updateGuards(state, dt, st, api) {
+    for (const a of state.run.allies) {
+      if (TYPES[a.type].attack !== "guard") continue;
+      const s = stats(a);
+      a.angle = (a.angle || 0) + s.spin * dt;
+      a.hits = a.hits || new Map();
+      state.bullets = (state.bullets || []).filter((b) => {
+        if (Math.hypot(b.x - a.x, b.y - (a.y - 9)) > 8) return true;
+        if (s.reflect) {
+          const e = nearest(state, a, 200);
+          if (e) {
+            const d = Math.hypot(e.x - a.x, e.y - a.y) || 1;
+            state.allyShots.push({ x: a.x, y: a.y - 9, vx: ((e.x - a.x) / d) * 200, vy: ((e.y - a.y) / d) * 200,
+                                   size: 3, damage: 1.5 * st.damage, life: 1, pierce: false, hit: new Set() });
+          }
+        }
+        return false;
+      });
+      if (!s.damage) continue;
+      for (const [e, t] of a.hits) {
+        if (t - dt <= 0) a.hits.delete(e);
+        else a.hits.set(e, t - dt);
+      }
+      for (const e of state.enemies) {
+        if (e.hp <= 0 || a.hits.has(e) || Math.hypot(e.x - a.x, e.y - a.y) > 8 + e.size / 2) continue;
+        a.hits.set(e, 0.5);
+        const dx = e.x - state.player.x, dy = e.y - state.player.y;
+        const dir = Math.abs(dx) >= Math.abs(dy) ? { x: Math.sign(dx) || 1, y: 0 } : { x: 0, y: Math.sign(dy) || 1 };
+        api.damage(e, s.damage * st.damage, dir, 10);
+      }
+    }
+  }
+
+  // --- Gloutonne : elle gobe ---
+  // Les gemmes à portée filent vers elle et sont ramassées ; un ennemi assez
+  // faible à sa portée est avalé d'un coup ; évoluée, elle avale aussi les
+  // rôdeurs.
+  function gobble(state, a, api) {
+    const s = stats(a);
+    for (const g of state.gems) {
+      if (Math.hypot(g.x - a.x, g.y - a.y) < s.pull) {
+        g.x += (a.x - g.x) * 0.5;
+        g.y += (a.y - g.y) * 0.5;
+      }
+    }
+    const caught = state.gems.filter((g) => Math.hypot(g.x - a.x, g.y - a.y) < 6);
+    if (caught.length) {
+      state.gems = state.gems.filter((g) => !caught.includes(g));
+      for (const g of caught) api.collect(g);
+    }
+    const prey = state.enemies.find((e) => e.hp > 0 && Math.hypot(e.x - a.x, e.y - a.y) < 18 &&
+      (e.type === "prowler" ? s.prowlers : e.hp <= s.eats && e.slot !== "boss"));
+    if (!prey) return caught.length > 0;
+    if (prey.type === "prowler") api.devour(prey);
+    else api.damage(prey, 999, null, 0);
+    if (state.events) state.events.push({ type: "devour", x: prey.x, y: prey.y });
+    return true;
+  }
+
+  // --- Ombre : le leurre ---
+  // Tant qu'il est là, les ennemis le poursuivent à la place du joueur (World
+  // le leur donne comme cible). Évolué, il explose en disparaissant.
+  function lure(state, a) {
+    if (state.decoy || !state.enemies.some((e) => e.hp > 0)) return false;
+    const s = stats(a);
+    state.decoy = { x: a.x, y: a.y, life: s.time, max: s.time, blast: s.blast || 0, damage: s.damage || 0,
+                    facing: { x: 0, y: 1 } };
+    return true;
+  }
+
+  function updateDecoy(state, dt, api) {
+    const d = state.decoy;
+    if (!d || (d.life -= dt) > 0) return;
+    state.decoy = null;
+    if (!d.blast) return;
+    state.blasts.push({ x: d.x, y: d.y, r: d.blast, life: 0.35 });
+    if (state.events) state.events.push({ type: "explode", x: d.x, y: d.y });
+    for (const e of [...state.enemies]) {
+      if (e.hp > 0 && Math.hypot(e.x - d.x, e.y - d.y) < d.blast + e.size / 2) api.damage(e, d.damage, null, 0);
+    }
+  }
+
+  // --- Rosée : elle soigne ---
+  // Les esprits tombés se relèvent seuls au bout de `revive` secondes ; dès
+  // le niveau 2, un cœur revient toutes les `heal` secondes.
+  function heal(state, dt) {
+    const a = state.run.allies.find((x) => TYPES[x.type].attack === "heal");
+    if (!a) return;
+    const s = stats(a), p = state.player;
+    for (const d of state.downed) if (DOWN_TIME - d.time >= s.revive) d.rose = true;
+    if (!s.heal || p.hp >= p.maxHp) return;
+    a.heal = (a.heal || 0) + dt;
+    if (a.heal < s.heal) return;
+    a.heal = 0;
+    p.hp++;
+    state.popups.push({ x: p.x, y: p.y - 12, text: "+1 cœur", time: 0.9 });
+    if (state.events) state.events.push({ type: "revive", x: p.x, y: p.y });
+  }
+
   // Un coup reçu : le dernier esprit de la file tombe à sa place, et le
   // joueur ne perd pas de cœur. Renvoie false s'il n'y avait personne.
   function absorb(state) {
@@ -287,7 +561,9 @@ const Allies = (() => {
     state.downed = state.downed.filter((d) => {
       d.time -= dt;
       if (d.time <= 0) return false;
-      if (Math.hypot(d.x - p.x, d.y - p.y) < (p.size + 10) / 2 && state.run.allies.length < maxFor(state.run)) {
+      // Relevé en passant dessus, ou tout seul grâce à la Rosée.
+      const touched = d.rose || Math.hypot(d.x - p.x, d.y - p.y) < (p.size + 10) / 2;
+      if (touched && state.run.allies.length < maxFor(state.run)) {
         state.run.allies.push({ type: d.type, level: d.level, x: d.x, y: d.y, cooldown: 0.3 });
         state.popups.push({ x: d.x, y: d.y - 4, text: "relevé !", time: 0.8 });
         if (state.events) state.events.push({ type: "revive", x: d.x, y: d.y });
@@ -297,5 +573,5 @@ const Allies = (() => {
     });
   }
 
-  return { TYPES, POOL, MAX_LEVEL, DOWN_TIME, maxFor, clearZone, add, meet, update, absorb };
+  return { TYPES, POOL, MAX_LEVEL, DOWN_TIME, canMeet, maxFor, clearZone, add, meet, update, absorb };
 })();

@@ -220,6 +220,7 @@ const World = (() => {
     r.floors[n].superUsed.clear();
     useFloor(n);
     r.deepest = Math.max(r.deepest || 1, n);
+    if (!state.sandbox && n >= 2) Save.discover("floor2");
     const cell = down ? ZoneRegistry.base : ZoneRegistry.stairs;
     const zone = ZoneRegistry.get(cell.x, cell.y);
     const at = down ? zone.stairsUp : zone.fire;
@@ -337,7 +338,7 @@ const World = (() => {
     const spiritKey = `spirit:${cx},${cy}`;
     state.wildSpirit = null;
     if (ZoneRegistry.spirit(cx, cy) && !state.run.taken.has(spiritKey) && !zone.safe && !campHere) {
-      const pool = Allies.POOL;
+      const pool = Allies.POOL.filter((k) => Allies.canMeet(k, state.run.floor || 1));
       const at = zone.gems[zone.gems.length - 1] || zone.fire;
       state.wildSpirit = { type: pool[deriveSeed(ZoneRegistry.seed, cx, cy, 77) % pool.length], key: spiritKey,
                            x: at.x, y: at.y, size: 12 };
@@ -637,6 +638,8 @@ const World = (() => {
     p.invuln = Math.max(0, p.invuln - dt);
     p.attackCooldown = Math.max(0, p.attackCooldown - dt);
     updateThreat(dt);
+    // Le carnet : survivre 30 secondes en présence du Chasseur.
+    if (state.hunter && !state.sandbox && (state.hunterTime = (state.hunterTime || 0) + dt) >= 30) Save.discover("hunter30");
 
     // Un virage demandé est pris tout de suite si le joueur est à l'arrêt ou
     // bloqué ; en pleine course, seulement quand la voie s'ouvre vraiment.
@@ -661,7 +664,7 @@ const World = (() => {
     }
     Weapons.update(state, dt, { kill, collect: pickUp, hit: (e) => emit("hit", e) });
     Powers.update(state, dt, state.run.powers, state.stats, { damage: damageEnemy });
-    Allies.update(state, dt, state.stats, { damage: damageEnemy });
+    Allies.update(state, dt, state.stats, { damage: damageEnemy, collect: pickUp, devour });
 
     attractGems(dt);
     state.gems = state.gems.filter((g) => {
@@ -681,7 +684,10 @@ const World = (() => {
     // Le Chasseur n'est pas dans la liste des ennemis : les armes ne le
     // touchent pas, et il ne compte pas parmi les morts de la zone.
     const hunters = state.hunter ? [state.hunter] : [];
-    enemyCtx.player = p;
+    // Le leurre de l'Ombre, tant qu'il est là, attire les ennemis à la place du
+    // joueur (ils visent et tirent vers lui ; les coups restent ceux du
+    // joueur).
+    enemyCtx.player = state.decoy || p;
     enemyCtx.others = state.enemies;
     enemyCtx.solids = state.solids;
     for (const e of [...state.enemies, ...hunters]) {
@@ -718,6 +724,7 @@ const World = (() => {
     }
     state.run.taken.add(s.key);
     state.wildSpirit = null;
+    if (!state.sandbox && Save.meetSpirit(s.type)) state.popups.push({ x: s.x, y: s.y - 30, text: "nouvel esprit !", time: 1.2 });
     state.bubble = { title: said[0], text: said[1], follow: s.type, x: s.x, y: s.y, time: 2.8, color: t.color };
     emit("revive", s);
   }
@@ -752,6 +759,7 @@ const World = (() => {
       state.gems.push({ kind: "gem", id: null, x: e.x + Math.cos(a) * 9, y: e.y + Math.sin(a) * 9, size: Config.GEM_SIZE, value });
     }
     emit("devour", e);
+    if (!state.sandbox && Save.count("prowlers") >= 5) Save.discover("prowlers5");
     state.popups.push({ x: e.x, y: e.y - 8, text: `rôdeur ×${state.devoured}`, time: 1 });
   }
 
@@ -761,6 +769,7 @@ const World = (() => {
     // cette carte.
     if (e.slot === "boss") {
       state.run.bossDead = true;
+      if (!state.sandbox) Save.discover("boss");
       state.drops.push({ kind: "chest", tier: "legendary", item: null, x: e.x, y: e.y, size: 12 });
       showBanner("Gardien vaincu", "il laisse un coffre légendaire", 3);
       return;
@@ -941,6 +950,7 @@ const World = (() => {
       // Au bac à sable, le butin ne compte pas : la vraie banque reste
       // intacte.
       if (!state.sandbox) Save.deposit(carried, state.run.mode);
+      if (!state.sandbox && Save.count("camps") >= 3) Save.discover("camps3");
       state.run.carried = 0;
     }
     Generator.moveCamp(ZoneRegistry.map);
@@ -1047,6 +1057,7 @@ const World = (() => {
     // est sauvée et va à la banque.
     const carried = state.run.carried;
     const saved = Math.floor(carried * Upgrades.keepOnDeath(state.run.mode));
+    if (!state.sandbox && carried >= 200) Save.discover("deathRich");
     if (saved > 0 && !state.sandbox) Save.deposit(saved, state.run.mode);
     state.run.carried = 0;
     state.phase = "dead";
