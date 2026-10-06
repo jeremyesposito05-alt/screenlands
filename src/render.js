@@ -90,6 +90,13 @@ const Render = (() => {
     const art = !!Sprites.get("ground_grass");
     const dress = art ? Scenery.dress(state) : null;
 
+    // La secousse décale tout le monde du jeu, jamais l'interface.
+    shake = Math.max(0, shake - dt);
+    hurtFlash = Math.max(0, hurtFlash - dt);
+    const amp = shake > 0 ? shakeAmp * (shake / SHAKE_TIME) : 0;
+    ctx.save();
+    if (amp) ctx.translate(Math.round((Math.random() - 0.5) * 2 * amp), Math.round((Math.random() - 0.5) * 2 * amp));
+
     if (art) {
       ctx.drawImage(groundLayer(state, dress), 0, 0);
     } else {
@@ -132,6 +139,17 @@ const Render = (() => {
     if (art) {
       drawOverhang(state, dress, dt);
       drawLighting(state, dress);
+    }
+
+    ctx.restore();
+    // Touché : un voile rouge qui s'efface.
+    if (hurtFlash > 0) {
+      const W = Config.ZONE_W, H = Config.ZONE_H;
+      const v = ctx.createRadialGradient(W / 2, H / 2, H * 0.25, W / 2, H / 2, H * 0.7);
+      v.addColorStop(0, "rgba(200, 30, 40, 0)");
+      v.addColorStop(1, `rgba(200, 30, 40, ${(0.45 * hurtFlash / HURT_FLASH).toFixed(3)})`);
+      ctx.fillStyle = v;
+      ctx.fillRect(0, 0, W, H);
     }
 
     for (const pop of state.popups) {
@@ -422,6 +440,22 @@ const Render = (() => {
       gr.addColorStop(1, "rgba(12, 10, 24, 0)");
       ctx.fillStyle = gr;
       ctx.fillRect(0, Math.min(y0, y1), W, 18);
+    }
+  }
+
+  // --- Réactions de l'écran ---
+  // Une secousse quand ça cogne, un voile rouge quand le héros est touché.
+  const SHAKE_TIME = 0.25, HURT_FLASH = 0.35;
+  const SHAKES = { hurt: 3, allyDown: 2, explode: 3.5, killBig: 1.5, victory: 3, death: 4 };
+  let shake = 0, shakeAmp = 0, hurtFlash = 0;
+  function react(events) {
+    for (const e of events) {
+      const a = SHAKES[e.type];
+      if (a) {
+        shakeAmp = shake > 0 ? Math.max(shakeAmp, a) : a;
+        shake = SHAKE_TIME;
+      }
+      if (e.type === "hurt" || e.type === "death") hurtFlash = HURT_FLASH;
     }
   }
 
@@ -1334,5 +1368,5 @@ const Render = (() => {
     ctx = saved;
   }
 
-  return { init, draw, iconInto };
+  return { init, draw, react, iconInto };
 })();

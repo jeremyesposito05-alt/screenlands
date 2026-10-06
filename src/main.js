@@ -14,6 +14,7 @@
   Input.init(document.getElementById("joystick"), attackButton,
              [document.getElementById("overlay"), document.getElementById("pause")]);
   Sprites.load();
+  Sound.init();
   Render.init(canvas);
   World.newExpedition();
   Menu.init();
@@ -59,6 +60,14 @@
         acc -= Config.STEP;
       }
     }
+    // Ce qui s'est passé pendant ces pas : bruitages et secousses.
+    const events = World.state.events;
+    if (events.length) {
+      Sound.handle(events);
+      Render.react(events);
+      events.length = 0;
+    }
+    Sound.update(World.state, dt, Menu.isOpen());
     // À la mort, la course s'arrête : on ne repart pas tout seul du camp.
     if (World.state.phase !== phase) {
       phase = World.state.phase;
@@ -83,5 +92,5 @@
   syncButtons();
 
   // Accès pour les tests et le débogage depuis la console.
-  window.Screenlands = { World, Input, Render, Config, Save, ZoneRegistry, Generator, Enemies, Weapons, Menu, syncButtons };
+  window.Screenlands = { World, Input, Render, Config, Save, ZoneRegistry, Generator, Enemies, Weapons, Menu, Sound, syncButtons };
 })();

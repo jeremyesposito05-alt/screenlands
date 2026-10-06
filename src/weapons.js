@@ -121,7 +121,10 @@ const Weapons = (() => {
         Enemies.stun(e, w.stun);
         return true;
       }
-      if (!Enemies.hit(e, dir, state.solids, w.damage, w.knockback)) return true;
+      if (!Enemies.hit(e, dir, state.solids, w.damage, w.knockback)) {
+        if (events.hit) events.hit(e);
+        return true;
+      }
       events.kill(e);
       return false;
     });

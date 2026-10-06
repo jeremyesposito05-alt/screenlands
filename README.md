@@ -156,6 +156,14 @@ coffres, gemmes, feu, portail et la plupart des icônes sont des images ;
 l'égide et les reliques sont encore des formes de couleur. Voir
 « Graphismes » plus bas.
 
+- **Du son** : une trentaine de bruitages (coups, gemmes qui montent la gamme
+  quand on les enchaîne, coffres selon leur rareté, coups reçus, alertes de
+  menace, Chasseur) et une musique qui suit la situation : calme au camp de
+  base, exploration, tension quand la menace monte ou que le Chasseur rôde,
+  combat devant le Gardien. Réglables dans les menus. L'écran tremble quand ça
+  cogne et rougit quand le héros est touché. Sons et musiques : pack Ninja
+  Adventure (CC0), voir `assets/audio/SOURCE.txt`.
+
 Ne sont **pas** implémentés, volontairement : l'XP, le glissement d'écran.
 Chaque système sera validé avant d'ajouter le suivant.
 
@@ -242,6 +250,7 @@ src/allies.js        les compagnons : la file, leurs attaques, la chute et le re
 src/world.js         l'expédition et ses règles : gemmes, coups, camps, transitions
 src/sprites.js       charge les images de assets/sprites
 src/scenery.js       habille chaque zone : sol, détails, arbres et lampadaires
+src/sound.js         bruitages et musique, déclenchés par les événements de World
 src/render.js        tout ce qui dessine, et rien d'autre, en couches
 src/menu.js          menu principal, pause et outils du bac à sable
 src/main.js          la boucle de jeu

@@ -89,6 +89,7 @@ const Menu = (() => {
 
   function act(action, data) {
     const S = World.sandbox;
+    Sound.play(action === "buy" ? "buy" : "click");
     switch (action) {
       case "play": return start(false);
       case "sandbox": return start(true);
@@ -103,6 +104,11 @@ const Menu = (() => {
       case "resume": return close();
       case "controls":
         applyMode(Input.mode === "swipe" ? "stick" : "swipe", false);
+        break;
+      case "sound":
+      case "music":
+        Save.toggle(action);
+        Sound.applySettings();
         break;
       case "quit":
         if (!confirmQuit) {
@@ -144,6 +150,15 @@ const Menu = (() => {
     else if (screen === "shop") panel.innerHTML = shopScreen();
   }
 
+  // Bruitages et musique, côte à côte.
+  function audioButtons() {
+    const d = Save.data;
+    return `<div class="grid" style="justify-content:center">
+      ${btn("sound", `Sons : ${d.sound ? "oui" : "non"}`, "", d.sound ? "on" : "")}
+      ${btn("music", `Musique : ${d.music ? "oui" : "non"}`, "", d.music ? "on" : "")}
+    </div>`;
+  }
+
   function mainScreen() {
     const d = Save.data;
     return `
@@ -154,6 +169,7 @@ const Menu = (() => {
         ${btn("shop", `Atelier · ${d.bank} 💎`, "", "big")}
         ${btn("sandbox", "Bac à sable", "", "big")}
         ${btn("controls", `Commandes : ${MODES[Input.mode].label}`)}
+        ${audioButtons()}
       </div>
       <p class="note">Banque ${d.bank} · meilleur butin ${d.best}</p>
       <p class="note dim">Le bac à sable permet de tout essayer : armes, pouvoirs, ennemis, menace. Ce qu'on y gagne ne va pas à la banque.</p>`;
@@ -188,6 +204,7 @@ const Menu = (() => {
       <div class="stack">
         ${btn("resume", "Reprendre", "", "big primary")}
         ${btn("controls", `Commandes : ${MODES[Input.mode].label}`)}
+        ${audioButtons()}
         ${btn("quit", confirmQuit ? "Confirmer : butin et équipement perdus" : "Abandonner l'expédition", "", confirmQuit ? "danger" : "")}
       </div>`;
   }

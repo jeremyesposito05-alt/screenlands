@@ -16,7 +16,8 @@ const Save = (() => {
   const KEY = "screenlands.save.v1";
   // `controls` : "swipe" (glisser) ou "stick" (joystick), voir Input.
   // `upgrades` : le niveau acheté de chaque amélioration de l'atelier.
-  const data = { bank: 0, best: 0, controls: "swipe", upgrades: {} };
+  // `sound`, `music` : bruitages et musique, réglables dans les menus.
+  const data = { bank: 0, best: 0, controls: "swipe", upgrades: {}, sound: true, music: true };
 
   try {
     Object.assign(data, JSON.parse(localStorage.getItem(KEY)) || {});
@@ -37,6 +38,10 @@ const Save = (() => {
     },
     setControls(mode) {
       data.controls = mode;
+      write();
+    },
+    toggle(key) {
+      data[key] = !data[key];
       write();
     },
     buyUpgrade(key, cost) {

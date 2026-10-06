@@ -124,12 +124,17 @@ const World = (() => {
     // entrée : {at: {x, y}, time} ou null.
     hunter: null,
     hunterComing: null,
+    // Ce qui vient de se passer pendant ce pas : {type, x, y}. Le son et
+    // les secousses de l'écran les lisent, puis main.js vide la liste. Les
+    // règles n'en dépendent jamais.
+    events: [],
     // Mode test (voir sandbox) : banque intacte ; `god` rend invincible.
     sandbox: false,
     god: false,
   };
 
   const zoneKey = () => `${state.coords.x},${state.coords.y}`;
+  const emit = (type, at = state.player) => state.events.push({ type, x: at.x, y: at.y });
   const has = (artifact) => state.run.artifacts.includes(artifact);
 
   // Tire une nouvelle carte, et remet l'expédition à zéro : plus d'arme, plus
@@ -299,11 +304,13 @@ const World = (() => {
     // Un tir de Tireur : un projectile qui file tout droit jusqu'au premier
     // mur, ou jusqu'au joueur.
     fire(e, dir, speed) {
+      emit("enemyShot", e);
       state.bullets.push({ kind: "bullet", x: e.x, y: e.y, size: 4, vx: dir.x * speed, vy: dir.y * speed, damage: e.damage });
     },
     // L'explosion d'un Kamikaze : elle blesse le joueur dans son rayon, et
     // aussi les autres ennemis, d'où l'intérêt de l'attirer dans un groupe.
     explode(e, radius, enemyDamage) {
+      emit("explode", e);
       state.blasts.push({ x: e.x, y: e.y, r: radius, life: 0.35 });
       const p = state.player;
       if (Math.hypot(p.x - e.x, p.y - e.y) < radius + p.size / 2 && p.invuln <= 0) hurt(e);
@@ -371,6 +378,7 @@ const World = (() => {
     else if (!state.zone.safe) r.threat += dt * state.stats.threatRate;
     const level = threatLevel();
     if (level > state.threatLevel && THREAT_NEWS[level]) {
+      emit("threat");
       showBanner(...THREAT_NEWS[level], 3);
     }
     // Le Chasseur surgit dès le dernier palier, sans attendre qu'on change de
@@ -378,6 +386,7 @@ const World = (() => {
     if (level >= Config.THREAT_MAX && state.threatLevel < Config.THREAT_MAX &&
         !state.zone.safe && !state.fire) {
       state.hunterComing = { at: nearestDoor(), time: Config.HUNTER_DELAY };
+      emit("hunter");
     }
     state.threatLevel = level;
 
@@ -496,8 +505,10 @@ const World = (() => {
       if (!state.swing) p.facing = dir;
       movePlayer(dir, speed() * dt);
     }
-    if (attack && state.run.weapon) Weapons.use(state, Stats.weapon(ITEMS[state.run.weapon], state.stats));
-    Weapons.update(state, dt, { kill, collect: pickUp });
+    if (attack && state.run.weapon && Weapons.use(state, Stats.weapon(ITEMS[state.run.weapon], state.stats))) {
+      emit({ sword: "swing", spear: "thrust", bow: "shoot", boomerang: "throw" }[state.run.weapon] || "swing");
+    }
+    Weapons.update(state, dt, { kill, collect: pickUp, hit: (e) => emit("hit", e) });
     Powers.update(state, dt, state.run.powers, state.stats, { damage: damageEnemy });
     Allies.update(state, dt, state.stats, { damage: damageEnemy });
 
@@ -532,6 +543,7 @@ const World = (() => {
   }
 
   function kill(e) {
+    emit(e.slot === "boss" ? "victory" : e.elite || e.heavy ? "killBig" : "kill", e);
     // Le Gardien vaincu lâche un coffre légendaire, et ne reviendra pas sur
     // cette carte.
     if (e.slot === "boss") {
@@ -566,6 +578,7 @@ const World = (() => {
 
   // Une gemme ramassée, par le joueur ou par le boomerang.
   function pickUp(g) {
+    emit("gem", g);
     state.run.carried += g.value;
     // Les gemmes lâchées par un ennemi n'ont pas d'identifiant : elles ne
     // réapparaîtraient de toute façon pas.
@@ -605,10 +618,12 @@ const World = (() => {
   const TIER_NAMES = { common: "commun", rare: "rare", epic: "épique", legendary: "légendaire" };
   function openLoot(c) {
     if (c.item) {
+      emit("item", c);
       take(c.item);
       return;
     }
     const tier = Loot.upgrade(c.tier, state.stats.luck, threatLevel());
+    emit(tier === "legendary" ? "legendary" : tier === "common" ? "chest" : "chestRare", c);
     const keys = Loot.open(tier, state.run);
     const upgraded = tier !== c.tier;
     for (const k of keys) take(k, true);
@@ -696,6 +711,7 @@ const World = (() => {
         r.artifacts.push(key);
     }
     recomputeStats();
+    if (!quiet) emit("item");
     if (!quiet) showBanner(title, item.hint);
     return [title, item.hint];
   }
@@ -718,6 +734,7 @@ const World = (() => {
     const healed = p.hp < p.maxHp;
     if (carried === 0 && !healed) return;
 
+    emit("bank");
     p.hp = p.maxHp;
     if (carried > 0) {
       // Au bac à sable, le butin ne compte pas : la vraie banque reste
@@ -750,6 +767,7 @@ const World = (() => {
     const p = state.player;
     const near = Math.hypot(p.x - portal.x, p.y - portal.y) < Config.PORTAL_RADIUS;
     if (near && !state.atPortal) {
+      emit("portal");
       newMap();
       enterZone(ZoneRegistry.base.x, ZoneRegistry.base.y);
       state.atPortal = true;
@@ -765,6 +783,7 @@ const World = (() => {
     if (state.god) return;
     // L'Égide prend le coup à la place du joueur.
     if (Powers.absorb(state, state.run.powers)) {
+      emit("block");
       p.invuln = 0.6;
       state.popups.push({ x: p.x, y: p.y - 6, text: "bloqué", time: 0.7 });
       return;
@@ -772,11 +791,13 @@ const World = (() => {
     // Un compagnon tombe à la place du joueur : pas de cœur perdu, mais le
     // même recul et le même répit, le temps de revenir le relever.
     if (Allies.absorb(state)) {
+      emit("allyDown");
       p.invuln = Config.HURT_INVULN;
       state.popups.push({ x: p.x, y: p.y - 6, text: "compagnon à terre", time: 0.9 });
       knockBack(enemy);
       return;
     }
+    emit("hurt");
     p.hp -= enemy.damage;
     p.invuln = Config.HURT_INVULN;
 
@@ -809,9 +830,11 @@ const World = (() => {
       recomputeStats();
       p.hp = p.maxHp;
       p.invuln = 2.5;
+      emit("phoenix");
       showBanner("Le phénix renaît", "tu reviens, cœurs pleins", 2.5);
       return;
     }
+    emit("death");
     const lost = state.run.carried;
     state.run.carried = 0;
     state.phase = "dead";
@@ -836,6 +859,7 @@ const World = (() => {
     }
     placeAtEntry(p, crossed);
     enterZone(tx, ty);
+    emit("door");
   }
 
   // Le bord que le joueur vient de dépasser, ou null tant qu'il est dans la

@@ -172,6 +172,7 @@ const Allies = (() => {
       if (Math.hypot(d.x - p.x, d.y - p.y) < (p.size + 9) / 2 && state.run.allies.length < maxFor(state.run)) {
         state.run.allies.push({ type: d.type, x: d.x, y: d.y, cooldown: 0.3 });
         state.popups.push({ x: d.x, y: d.y - 4, text: "relevé !", time: 0.8 });
+        if (state.events) state.events.push({ type: "revive", x: d.x, y: d.y });
         return false;
       }
       return true;

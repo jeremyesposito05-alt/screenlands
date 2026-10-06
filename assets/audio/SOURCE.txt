@@ -1,0 +1,6 @@
+Bruitages et musiques : Ninja Adventure Asset Pack, par Pixel-Boy et AAA,
+sous licence CC0 (domaine public). https://pixel-boy.itch.io/ninja-adventure-asset-pack
+Bruitages convertis en mono 22 kHz (moitié de la taille) ; musiques telles quelles.
+
+music_base = 5 - Peaceful, music_explore = 11 - Clearing,
+music_danger = 28 - Tension, music_boss = 17 - Fight.
