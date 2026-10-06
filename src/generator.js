@@ -33,7 +33,10 @@ const Generator = (() => {
 
   // Une carte trop profonde est retirée avec une graine dérivée, pour que la
   // même graine de départ redonne toujours la même carte.
-  // `opts.extraChests` : des coffres de plus (l'atelier).
+  // `opts.extraChests` : des coffres de plus (l'atelier). `opts.floor` : l'étage ;
+  // au-delà du premier, le point de départ est un palier (escalier qui
+  // remonte) au lieu du camp de base, et le camp n'apparaît qu'à partir du
+  // troisième.
   function generate(seed, opts = {}) {
     let map;
     for (let attempt = 0; attempt < 50; attempt++) {
@@ -41,6 +44,7 @@ const Generator = (() => {
       if (map.depth <= Config.MAP_MAX_DISTANCE) break;
     }
     map.seed = seed;
+    map.floor = opts.floor || 1;
     return map;
   }
 
@@ -106,7 +110,7 @@ const Generator = (() => {
       }
     }
 
-    start.layout = "base";
+    start.layout = (opts.floor || 1) > 1 ? "landing" : "base";
     const wild = [...cells.values()].filter((c) => c !== start);
     const far = Math.max(...wild.map((c) => c.distance));
 
@@ -169,10 +173,18 @@ const Generator = (() => {
     //    Les suivants seront tirés par moveCamp(), avec leur propre hasard
     //    à graine, pour qu'une même carte déroule toujours la même suite de
     //    camps. Jamais dans l'écran du Gardien.
+    // L'escalier qui descend est dans l'écran du Gardien : il faut le trouver,
+    // et passer devant lui.
     const map = { seed, size, base, cells, depth: far, camp: null,
                   boss: { x: bossCell.x, y: bossCell.y },
+                  stairs: { x: bossCell.x, y: bossCell.y },
                   campRng: makeRandom(deriveSeed(seed, 7777)) };
-    placeCamp(map, (c) => c.distance >= CAMP_FIRST_MIN && c.distance <= CAMP_FIRST_MAX);
+    const floor = opts.floor || 1;
+    // Pas de camp au deuxième étage : il faut remonter mettre son butin à
+    // l'abri. Il en revient un à partir de Config.CAMP_FLOOR.
+    if (floor === 1 || floor >= Config.CAMP_FLOOR) {
+      placeCamp(map, (c) => c.distance >= CAMP_FIRST_MIN && c.distance <= CAMP_FIRST_MAX);
+    }
     return map;
   }
 
@@ -184,7 +196,7 @@ const Generator = (() => {
 
   function placeCamp(map, fits) {
     const isBoss = (c) => map.boss && c.x === map.boss.x && c.y === map.boss.y;
-    const wild = [...map.cells.values()].filter((c) => c.layout !== "base" && !isBoss(c));
+    const wild = [...map.cells.values()].filter((c) => !LAYOUTS[c.layout].safe && !isBoss(c));
     const ok = wild.filter(fits);
     const c = map.campRng.pick(ok.length ? ok : wild);
     map.camp = { x: c.x, y: c.y };
@@ -193,6 +205,7 @@ const Generator = (() => {
   // Le camp vient de servir : il s'éteint, et un autre s'allume ailleurs, loin
   // de lui et jamais dans l'écran du camp de base.
   function moveCamp(map) {
+    if (!map.camp) return;
     const old = map.camp;
     placeCamp(map, (c) => c.distance >= 2 &&
       Math.abs(c.x - old.x) + Math.abs(c.y - old.y) >= CAMP_MOVE_MIN);

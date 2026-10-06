@@ -159,6 +159,15 @@ coffres, gemmes, feu, portail et la plupart des icônes sont des images ;
 l'égide et les reliques sont encore des formes de couleur. Voir
 « Graphismes » plus bas.
 
+- **Des étages.** L'escalier qui descend est dans l'écran du Gardien, qu'il faut
+  trouver (ni lui ni l'escalier ne sont sur la mini-carte avant d'avoir été
+  vus). En bas, on arrive sur un palier avec l'escalier qui remonte. Chaque
+  étage compte comme 3 écrans de distance de plus pour la force des ennemis,
+  ajoute 2 ennemis par salle et des élites, et ses gemmes valent ×2, ×3…
+  Pas de camp au 2e étage (il faut remonter pour mettre à l'abri), un camp à
+  partir du 3e. Chaque étage garde sa mémoire (coffres, gemmes, carte vue),
+  sauf ses monstres : ils sont tous de retour quand on y revient. Réglages
+  `FLOOR_*` dans `src/config.js`.
 - **Trois modes**, choisis avant chaque expédition : facile (le butin porté est
   gardé à la mort, gemmes ×0,5), normal (25 % gardé, jusqu'à 60 % avec le
   coffre-fort), difficile (tout perdu, gemmes ×1,5, achats réservés).

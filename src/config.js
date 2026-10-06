@@ -109,6 +109,19 @@ const Config = Object.freeze({
   PROWLER_CHANCE_PER_DISTANCE: 0.06,
   PROWLER_CHANCE_MAX: 0.65,
   FRIGHT_TIME: 6,
+
+  // Les étages. Chacun compte comme FLOOR_DEPTH écrans de distance de plus
+  // pour la force des ennemis et les espèces qui apparaissent, ajoute
+  // FLOOR_EXTRA_ENEMIES ennemis par salle, des élites et des points de vie au
+  // Gardien ; ses gemmes valent (1 + FLOOR_GEM_BONUS) fois plus par étage.
+  // Pas de camp au 2e étage, il en revient un à partir de CAMP_FLOOR.
+  FLOOR_DEPTH: 3,
+  FLOOR_EXTRA_ENEMIES: 2,
+  FLOOR_ELITE_CHANCE: 0.08,
+  FLOOR_GUARDIAN_HP: 8,
+  FLOOR_GEM_BONUS: 1,
+  CAMP_FLOOR: 3,
+  STAIRS_RADIUS: 10,
   // Un point de vie de plus tous les ENEMY_HP_EVERY écrans de distance.
   ENEMY_HP_EVERY: 3,
   // Touché, un ennemi est repoussé et reste étourdi, donc inoffensif, un

@@ -153,6 +153,17 @@ const LAYOUTS = {
     spawns: [],
     portal: p(40, 100),
   },
+  // L'arrivée d'un étage inférieur : l'escalier qui remonte, sans ennemi ni
+  // feu. On y souffle un instant avant d'explorer.
+  landing: {
+    name: "Palier",
+    ground: "#1c1a22",
+    safe: true,
+    obstacles: [],
+    gems: [],
+    spawns: [],
+    stairsUp: p(96, 150),
+  },
 };
 
 // Les zones que le générateur peut tirer pour un écran ordinaire.
@@ -189,6 +200,11 @@ const ZoneRegistry = (() => {
     // Le camp brûle-t-il dans cet écran ? Il n'y en a qu'un à la fois.
     isCamp(cx, cy) { return !!map.camp && map.camp.x === cx && map.camp.y === cy; },
     get camp() { return map.camp; },
+    // L'étage de cette carte (1 en surface), et l'écran de l'escalier qui
+    // descend : celui du Gardien.
+    get floor() { return map.floor || 1; },
+    get stairs() { return map.stairs; },
+    isStairs(cx, cy) { return !!map.stairs && map.stairs.x === cx && map.stairs.y === cy; },
     // L'écran du Gardien, le mini-boss du bout de la carte.
     get boss() { return map.boss; },
     isBoss(cx, cy) { return !!map.boss && map.boss.x === cx && map.boss.y === cy; },

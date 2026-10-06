@@ -137,6 +137,7 @@ const Menu = (() => {
       case "freeze": S.freezeThreat(World.state.run.threatFrozen !== Infinity); break;
       case "chest": S.spawnChest(data.tier); return close();
       case "camp": S.goToCamp(); return close();
+      case "floor": S.nextFloor(); return close();
       case "newMap": S.newMap(); return close();
     }
     render();
@@ -284,6 +285,7 @@ const Menu = (() => {
       <section><h3>Coffre devant toi</h3><div class="grid">${chests}</div></section>
       <section><h3>Carte</h3><div class="grid">
         ${btn("camp", "Aller au camp")}
+        ${btn("floor", `Étage suivant (${World.state.run.floor + 1})`)}
         ${btn("newMap", "Nouvelle carte")}
       </div></section>
       <div class="stack foot">${btn("quit", confirmQuit ? "Confirmer : retour au menu" : "Menu principal", "", confirmQuit ? "danger" : "")}</div>`;

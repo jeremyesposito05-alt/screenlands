@@ -104,6 +104,12 @@ const World = (() => {
       // Coffres ouverts, "x,y", et objets posés au sol, "x,y" -> liste.
       opened: new Set(),
       drops: new Map(),
+      // L'étage où l'on est (1 en surface), la mémoire de chaque étage visité
+      // (voir makeFloor ; taken, killed, opened et drops pointent sur celle de
+      // l'étage courant) et le plus profond atteint.
+      floor: 1,
+      floors: [],
+      deepest: 1,
     },
     // Zones déjà vues de la carte en cours, pour la mini-carte.
     visited: new Set(),
@@ -133,6 +139,10 @@ const World = (() => {
     // dangereux.
     superGem: null,
     frightened: 0,
+    // Les escaliers de la zone, {dir: "down" | "up", x, y}, et le joueur est-il
+    // encore dessus (il vient d'arriver par là) ?
+    stairs: [],
+    atStairs: false,
     // Mode test (voir sandbox) : banque intacte ; `god` rend invincible.
     sandbox: false,
     god: false,
@@ -146,12 +156,9 @@ const World = (() => {
   // d'artefact, plus rien de ce qui concernait l'ancienne carte. Le butin
   // porté n'est pas touché ici : la mort le perd, le portail le garde.
   function newMap(seed) {
-    ZoneRegistry.load(Generator.generate(seed ?? Generator.freshSeed(), { extraChests: Upgrades.extraChests() }));
     const r = state.run;
-    r.taken.clear();
-    r.killed.clear();
-    r.opened.clear();
-    r.drops.clear();
+    r.floors = [null, makeFloor(Generator.generate(seed ?? Generator.freshSeed(), { extraChests: Upgrades.extraChests(), floor: 1 }))];
+    useFloor(1);
     r.weapon = null;
     r.artifacts = [];
     r.powers = {};
@@ -164,9 +171,82 @@ const World = (() => {
     state.threatLevel = 0;
     state.hunter = null;
     state.hunterComing = null;
-    state.visited.clear();
     recomputeStats();
     Upgrades.equip(state);
+  }
+
+  // --- Les étages ---
+  // Chaque étage est une carte, avec sa mémoire : gemmes prises, morts,
+  // coffres ouverts, objets au sol, écrans vus, Gardien vaincu. On la range
+  // en quittant l'étage et on la retrouve en revenant, sauf les morts : tous
+  // les monstres d'un étage retrouvé sont de retour.
+  function makeFloor(map) {
+    return { map, taken: new Set(), killed: new Map(), opened: new Set(), drops: new Map(),
+             visited: new Set(), bossDead: false };
+  }
+
+  function useFloor(n) {
+    const r = state.run, f = r.floors[n];
+    ZoneRegistry.load(f.map);
+    r.floor = n;
+    r.taken = f.taken;
+    r.killed = f.killed;
+    r.opened = f.opened;
+    r.drops = f.drops;
+    r.bossDead = f.bossDead;
+    state.visited = f.visited;
+  }
+
+  // Descendre (ou remonter) d'un étage. En descendant, on arrive sur le palier
+  // du dessous ; en remontant, devant l'escalier qu'on avait pris.
+  function changeFloor(n) {
+    const r = state.run;
+    r.floors[r.floor].bossDead = r.bossDead;
+    if (!r.floors[n]) {
+      const seed = deriveSeed(r.floors[1].map.seed, n);
+      r.floors[n] = makeFloor(Generator.generate(seed, { extraChests: Upgrades.extraChests(), floor: n }));
+    }
+    const down = n > r.floor;
+    r.floors[n].killed.clear();
+    useFloor(n);
+    r.deepest = Math.max(r.deepest || 1, n);
+    const cell = down ? ZoneRegistry.base : ZoneRegistry.stairs;
+    const zone = ZoneRegistry.get(cell.x, cell.y);
+    const at = down ? zone.stairsUp : zone.fire;
+    const p = state.player;
+    p.x = at.x;
+    p.y = at.y + 20;
+    state.atStairs = true;
+    enterZone(cell.x, cell.y);
+    emit("stairs");
+    if (down) {
+      showBanner(`Étage ${n}`, n >= Config.CAMP_FLOOR || n === 1 ? `gemmes ×${floorGemMul()} · un camp brûle quelque part`
+        : `gemmes ×${floorGemMul()} · aucun camp : remonte pour mettre à l'abri`, 3);
+    } else {
+      showBanner(`Étage ${n}`, "tous les monstres sont de retour", 2.5);
+    }
+  }
+
+  // Ce que l'étage ajoute : de la profondeur (ennemis plus forts, espèces plus
+  // dangereuses plus tôt), des ennemis en plus, des gemmes qui valent plus.
+  const floorExtra = () => (state.run.floor || 1) - 1;
+  const depthOf = (distance) => distance + floorExtra() * Config.FLOOR_DEPTH;
+  const floorGemMul = () => 1 + floorExtra() * Config.FLOOR_GEM_BONUS;
+
+  // Les escaliers de la zone : on les prend en marchant dessus. En arrivant
+  // par un escalier, il faut d'abord s'en écarter.
+  function useStairs() {
+    const p = state.player;
+    let near = false;
+    for (const s of state.stairs) {
+      if (Math.hypot(p.x - s.x, p.y - s.y) >= Config.STAIRS_RADIUS) continue;
+      near = true;
+      if (!state.atStairs) {
+        changeFloor(state.run.floor + (s.dir === "down" ? 1 : -1));
+        return;
+      }
+    }
+    state.atStairs = near;
   }
 
   // Les caractéristiques changent à chaque objet pris ou perdu. Un cœur de
@@ -212,6 +292,9 @@ const World = (() => {
     const campHere = ZoneRegistry.isCamp(cx, cy);
     state.fire = campHere ? zone.fire : null;
     state.portal = zone.portal || null;
+    state.stairs = [];
+    if (ZoneRegistry.isStairs(cx, cy) && zone.fire) state.stairs.push({ dir: "down", x: zone.fire.x, y: zone.fire.y });
+    if (zone.stairsUp) state.stairs.push({ dir: "up", x: zone.stairsUp.x, y: zone.stairsUp.y });
     state.atFire = false;
     state.atPortal = false;
     state.popups = [];
@@ -258,9 +341,12 @@ const World = (() => {
     const level = threatLevel();
     const table = Config.ENEMIES_BY_DISTANCE;
     const planned = zone.safe || campHere ? 0
-      : table[Math.min(distance, table.length - 1)] + Math.floor(level / Config.THREAT_EXTRA_ENEMY_EVERY);
+      : table[Math.min(distance, table.length - 1)] + Math.floor(level / Config.THREAT_EXTRA_ENEMY_EVERY)
+        + Config.FLOOR_EXTRA_ENEMIES * floorExtra();
+    // La profondeur, distance et étage confondus, fixe la force des ennemis.
+    const depth = depthOf(distance);
     const seed = ZoneRegistry.seed;
-    const roster = Enemies.roster(planned, distance, makeRandom(deriveSeed(seed, cx, cy)))
+    const roster = Enemies.roster(planned, depth, makeRandom(deriveSeed(seed, cx, cy)))
       .map((type, i) => ({ type, i }))
       .slice(deadCount(`${cx},${cy}`));
 
@@ -273,8 +359,8 @@ const World = (() => {
     // prend le point d'apparition le plus éloigné, les autres se partagent le
     // reste.
     if (ZoneRegistry.isBoss(cx, cy) && !state.run.bossDead && spots.length) {
-      const g = Enemies.spawn("guardian", spots.shift(), distance, {
-        hp: Enemies.TYPES.guardian.hp + distance,
+      const g = Enemies.spawn("guardian", spots.shift(), depth, {
+        hp: Enemies.TYPES.guardian.hp + distance + Config.FLOOR_GUARDIAN_HP * floorExtra(),
         speed: Config.THREAT_SPEED * level,
       });
       g.slot = "boss";
@@ -282,11 +368,17 @@ const World = (() => {
     }
     // Être une élite est tiré par ennemi, avec une graine fixe : repasser la
     // porte ne relance pas le dé. Un essaim occupe une seule place de la liste
-    // mais compte plusieurs individus.
-    const eliteChance = Math.min(Config.ELITE_CHANCE_MAX, Config.ELITE_CHANCE * level);
-    roster.slice(0, spots.length).forEach(({ type, i }, n) => {
+    // mais compte plusieurs individus. Plus d'ennemis que de points
+    // d'apparition (aux étages profonds) : ils se partagent les points, un peu
+    // décalés quand la place est libre.
+    const eliteChance = Math.min(Config.ELITE_CHANCE_MAX, Config.ELITE_CHANCE * level + Config.FLOOR_ELITE_CHANCE * floorExtra());
+    const free = (at) => !state.solids.some((s) => Physics.overlapsRect({ x: at.x, y: at.y, size: 12 }, s));
+    if (spots.length) roster.forEach(({ type, i }, n) => {
       const roll = deriveSeed(seed, cx, cy, 100 + i) / 4294967296;
-      state.enemies.push(...Enemies.spawnGroup(type, spots[n], distance, {
+      const base = spots[n % spots.length], ring = Math.floor(n / spots.length);
+      const shifted = { x: base.x + ((i * 7) % 3 - 1) * 12 * ring, y: base.y + ((i * 5) % 3 - 1) * 12 * ring };
+      const at = ring && free(shifted) ? shifted : base;
+      state.enemies.push(...Enemies.spawnGroup(type, at, depth, {
         elite: roll < eliteChance,
         speed: Config.THREAT_SPEED * level,
         slot: i,
@@ -298,16 +390,19 @@ const World = (() => {
     // feu de camp (toujours atteignable).
     state.superGem = null;
     state.frightened = 0;
-    if (planned > 0 && distance >= Config.PROWLER_FROM) {
+    if (planned > 0 && depth >= Config.PROWLER_FROM) {
       const rng = makeRandom(deriveSeed(seed, cx, cy, 300));
       const chance = Math.min(Config.PROWLER_CHANCE_MAX,
-        Config.PROWLER_CHANCE + Config.PROWLER_CHANCE_PER_DISTANCE * distance + 0.05 * level);
-      const count = rng.chance(chance) ? 1 + (distance >= 6 && rng.chance(0.35) ? 1 : 0) : 0;
+        Config.PROWLER_CHANCE + Config.PROWLER_CHANCE_PER_DISTANCE * depth + 0.05 * level);
+      const count = rng.chance(chance) ? 1 + (depth >= 6 && rng.chance(0.35) ? 1 : 0) : 0;
       const far = zone.spawns.slice().sort((a, b) => Math.hypot(b.x - p.x, b.y - p.y) - Math.hypot(a.x - p.x, a.y - p.y));
       for (let k = 0; k < count; k++) {
-        state.enemies.push(Enemies.spawn("prowler", far[k % far.length], distance, { speed: Config.THREAT_SPEED * level }));
+        state.enemies.push(Enemies.spawn("prowler", far[k % far.length], depth, { speed: Config.THREAT_SPEED * level }));
       }
-      if (count && zone.fire) state.superGem = { kind: "superGem", x: zone.fire.x, y: zone.fire.y, size: 10 };
+      // Dans l'écran de l'escalier, le point du feu est pris : la super-gemme va
+      // sur celui d'une gemme.
+      const at = ZoneRegistry.isStairs(cx, cy) ? zone.gems[0] || zone.fire : zone.fire;
+      if (count && at) state.superGem = { kind: "superGem", x: at.x, y: at.y, size: 10 };
     }
   }
 
@@ -439,7 +534,7 @@ const World = (() => {
   function gemValue(distance) {
     const mul = state.stats ? state.stats.gemMul : 1;
     const mode = Config.MODES[state.run.mode] || Config.MODES.normal;
-    return Math.max(1, Math.round(Config.GEM_BASE * (1 + distance) * mul * mode.gems));
+    return Math.max(1, Math.round(Config.GEM_BASE * (1 + distance) * floorGemMul() * mul * mode.gems));
   }
 
   function speed() {
@@ -548,6 +643,8 @@ const World = (() => {
     pickUpDrops();
     restAtFire();
     enterPortal();
+    useStairs();
+    if (state.phase !== "play") return;
 
     // Le Chasseur n'est pas dans la liste des ennemis : les armes ne le
     // touchent pas, et il ne compte pas parmi les morts de la zone.
@@ -1070,11 +1167,13 @@ const World = (() => {
     },
     goToCamp() {
       const c = ZoneRegistry.camp;
+      if (!c) return;
       const p = state.player;
       p.x = Config.ZONE_W / 2;
       p.y = Config.ZONE_H / 2 + 40;
       enterZone(c.x, c.y);
     },
+    nextFloor() { changeFloor(state.run.floor + 1); },
     newMap() {
       const r = state.run;
       const keep = { weapon: r.weapon, artifacts: r.artifacts, powers: r.powers, relics: r.relics, allies: r.allies };

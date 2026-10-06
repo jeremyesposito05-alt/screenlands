@@ -139,6 +139,8 @@ const Sound = (() => {
         play("gem", 2 ** (Math.min(gemStreak, 12) / 12));
         gemStreak++;
         gemTimer = 0.9;
+      } else if (e.type === "stairs") {
+        play("portal", 0.8);
       } else if (SFX[e.type]) {
         play(e.type);
       }

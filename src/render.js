@@ -106,6 +106,7 @@ const Render = (() => {
 
     if (state.fire) drawFire(state.fire);
     if (state.portal) drawPortal(state.portal);
+    for (const s of state.stairs) drawStairs(s);
     drawGroundFx(state.fx);
     if (!art) {
       for (const s of solids) {
@@ -587,6 +588,36 @@ const Render = (() => {
       }
     }
     ctx.globalAlpha = 1;
+  }
+
+  // Un escalier, en pixels : un trou sombre et ses marches qui s'enfoncent
+  // pour descendre, des marches claires qui montent vers la lumière pour
+  // remonter. Un halo l'annonce de loin.
+  function drawStairs(s) {
+    const x = Math.round(s.x - 10), y = Math.round(s.y - 10);
+    const down = s.dir === "down";
+    const glow = ctx.createRadialGradient(s.x, s.y, 2, s.x, s.y, 20);
+    glow.addColorStop(0, down ? "rgba(120, 200, 255, 0.35)" : "rgba(255, 230, 160, 0.4)");
+    glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(s.x - 20, s.y - 20, 40, 40);
+    ctx.fillStyle = "#1d1230";
+    ctx.fillRect(x - 1, y - 1, 22, 22);
+    const steps = down ? ["#8c8794", "#5e5866", "#3a3442", "#221c2c", "#120c1a"] : ["#3a3442", "#5e5866", "#8c8794", "#b8b2a6", "#e8e0cc"];
+    steps.forEach((c, i) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(x, y + i * 4, 20, 4);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
+      ctx.fillRect(x, y + i * 4 + 3, 20, 1);
+    });
+    // Une flèche qui palpite indique le sens.
+    const bob = Math.round(Math.sin(clock * 4) * 1.5);
+    ctx.fillStyle = down ? "#9fdcff" : "#fff3c4";
+    const ay = down ? y - 7 + bob : y - 9 - bob;
+    for (let k = 0; k < 3; k++) {
+      const w = down ? 7 - 2 * k : 1 + 2 * k;
+      ctx.fillRect(s.x - Math.floor(w / 2), ay + k, w, 1);
+    }
   }
 
   // La super-gemme : une grosse gemme qui palpite dans un halo blanc.
@@ -1376,7 +1407,8 @@ const Render = (() => {
       drawIcon(key, x, y);
       x += 13;
     }
-    text(`banque ${Save.data.bank}`, Config.ZONE_W - 4, Config.ZONE_H - 12, STYLE.dim, "right");
+    const floor = state.run.floor > 1 ? `étage ${state.run.floor} · ` : "";
+    text(`${floor}banque ${Save.data.bank}`, Config.ZONE_W - 4, Config.ZONE_H - 12, STYLE.dim, "right");
   }
 
   // La mini-carte montre ce qu'on sait : le camp de base (violet, comme son
@@ -1391,10 +1423,11 @@ const Render = (() => {
     const visited = (x, y) => state.visited.has(`${x},${y}`);
     const lantern = World.has("lantern");
     const isBase = (c) => c.x === ZoneRegistry.base.x && c.y === ZoneRegistry.base.y;
-    // Le Gardien est connu d'avance, en rouge, tant qu'il vit : c'est le but
-    // du bout de la carte.
+    // Le Gardien et l'escalier qui descend ne sont plus connus d'avance : il
+    // faut les trouver. Une fois vu, l'écran est rouge tant que le Gardien
+    // vit, et l'escalier y est marqué d'un point blanc.
     const bossAt = (c) => ZoneRegistry.isBoss(c.x, c.y) && !state.run.bossDead;
-    const known = (c) => lantern || visited(c.x, c.y) || isBase(c) || bossAt(c) ||
+    const known = (c) => lantern || visited(c.x, c.y) || isBase(c) ||
       (c.links.left && visited(c.x - 1, c.y)) || (c.links.right && visited(c.x + 1, c.y)) ||
       (c.links.up && visited(c.x, c.y - 1)) || (c.links.down && visited(c.x, c.y + 1));
 
@@ -1413,6 +1446,10 @@ const Render = (() => {
       if (chestHere && (seen || lantern) && !here) {
         ctx.fillStyle = TIERS[c.chest.tier];
         ctx.fillRect(x + 1, y + 1, 2, 2);
+      }
+      if (ZoneRegistry.isStairs(c.x, c.y) && (seen || lantern) && !here) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(x + 1, y + 2, 2, 2);
       }
       // Les portes d'un écran visité, vers la droite et vers le bas : chaque
       // passage n'est dessiné qu'une fois.

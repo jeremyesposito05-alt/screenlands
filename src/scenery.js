@@ -14,7 +14,7 @@
 
 const Scenery = (() => {
   // Les sols de terre battue ; les autres sont herbeux.
-  const DIRT = new Set(["ruins", "narrows", "base"]);
+  const DIRT = new Set(["ruins", "narrows", "base", "landing"]);
   // Pas les fleurs : à cette taille, on les prenait pour une bête.
   const DECALS = ["decal_grass", "decal_pebbles", "decal_puddle", "decal_leaves", "decal_root"];
   // Un arbre ou un lampadaire reste à cette distance d'une porte, pour ne
@@ -67,7 +67,7 @@ const Scenery = (() => {
         ys.push(y);
       }
       for (const y of ys) {
-        props.push({ type: rng.chance(layout === "base" ? 0.3 : 0.65) ? "tree" : "lamp", side, y });
+        props.push({ type: rng.chance(layout === "base" || layout === "landing" ? 0.3 : 0.65) ? "tree" : "lamp", side, y });
       }
     }
 
