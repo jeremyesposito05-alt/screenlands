@@ -282,13 +282,17 @@ async function build() {
   // Chaque recette retrouve son élément sur sa planche.
   const jobs = [];
   for (const r of RECIPES) {
-    const key = `${r.src}|${r.link || 2}`;
+    const key = `${r.src}|${r.link || 2}|${JSON.stringify(r.area || null)}|${JSON.stringify(r.bgAt || null)}`;
     if (!sheets.has(key)) {
       const { img } = pixelsOf(await loadImage(`../assets/concepts/${r.src}`));
       sheets.set(key, { img, ...detect(img, r.link, r.bgAt, r.area) });
     }
     const { img, bg, figures } = sheets.get(key);
-    const fig0 = figures[r.pick];
+    // `pick: "largest"` : le plus grand élément (une case de grille avec une
+    // étiquette de texte à côté du personnage).
+    const fig0 = r.pick === "largest"
+      ? figures.reduce((a, b) => ((b.x1 - b.x0) * (b.y1 - b.y0) > (a.x1 - a.x0) * (a.y1 - a.y0) ? b : a), figures[0])
+      : figures[r.pick];
     if (!fig0) { out.append(`${r.out} : élément n° ${r.pick} introuvable. `); continue; }
     // `crop` : une partie de l'élément seulement, en fractions de sa boîte.
     const fig = { ...fig0 };
