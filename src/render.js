@@ -329,25 +329,30 @@ const Render = (() => {
       if (img) drawSprite(img, d.x, d.y, d.flip, g);
     }
 
-    // Les obstacles : un rocher par bloc carré, de la haie pour les murs
-    // intérieurs allongés.
-    for (const s of state.solids) {
-      if (s.kind === "wall" || s.kind === "seal") continue;
-      if (s.w === s.h) {
-        const big = s.w > Config.TILE;
-        const img = S(`${big ? "rock" : "rock_small"}_${(s.x * 7 + s.y * 3) % 2 ? "a" : "b"}`);
-        g.fillStyle = "rgba(30, 20, 50, 0.3)";
-        g.beginPath();
-        g.ellipse(s.x + s.w / 2, s.y + s.h - 1, s.w / 2, s.h / 6, 0, 0, Math.PI * 2);
-        g.fill();
-        if (img) g.drawImage(img, Math.round(s.x + (s.w - img.w) / 2), s.y + s.h - img.h, img.w, img.h);
-      } else {
-        hedgeRun(g, s, true);
-      }
+    // Les obstacles, habillés par Scenery : un objet par bloc carré, un muret
+    // (ou de la haie, faute d'image) pour les murs intérieurs allongés.
+    // Rangés de haut en bas, pour que ceux de devant recouvrent les autres.
+    const blocks = state.solids.filter((s) => s.kind !== "wall" && s.kind !== "seal").sort((a, b) => a.y + a.h - b.y - b.h);
+    for (const s of blocks) {
+      const skin = dress.skins.get(`${s.x},${s.y}`);
+      const img = skin && S(skin.name);
+      if (s.w !== s.h && !img) { hedgeRun(g, s, true, "hedge"); continue; }
+      g.fillStyle = "rgba(30, 20, 50, 0.3)";
+      g.beginPath();
+      g.ellipse(s.x + s.w / 2, s.y + s.h - 1, s.w / 2, s.h / 6, 0, 0, Math.PI * 2);
+      g.fill();
+      // Le pied de l'image un peu sous le bloc : le relief déborde vers le haut.
+      if (img) drawSprite(img, Math.round(s.x + (s.w - img.w) / 2), s.y + s.h + 2 - img.h, skin.flip, g);
     }
 
-    // Les murs de bordure : une haie.
-    for (const s of state.solids) if (s.kind === "wall") hedgeRun(g, s, false);
+    // Les murs de bordure, dans le style tiré pour la salle, et ses deux
+    // angles du bas (ceux du haut sont sous le bandeau).
+    for (const s of state.solids) if (s.kind === "wall") hedgeRun(g, s, false, dress.border);
+    const corner = dress.border !== "hedge" && S(`border_${dress.border}_corner`);
+    if (corner) {
+      drawSprite(corner, W - corner.w, H - corner.h, false, g);
+      drawSprite(corner, 0, H - corner.h, true, g);
+    }
 
     // Les encadrements de porte.
     const exits = ZoneRegistry.exits(state.coords.x, state.coords.y);
@@ -404,10 +409,12 @@ const Render = (() => {
   // Une haie le long d'un mur, en morceaux qui se chevauchent pour cacher
   // leurs bouts arrondis. Elle déborde un peu vers la salle, jamais dans
   // l'ouverture d'une porte.
-  function hedgeRun(g, s, inner) {
+  // `style` : "hedge" ou une bordure de la planche E (border_<style>_h / _v).
+  const BORDER_DARK = { hedge: HEDGE_DARK, flowers: HEDGE_DARK, stone: "#3a3833", fence: "#33261a", cliff: "#38342e" };
+  function hedgeRun(g, s, inner, style = "hedge") {
     const horizontal = s.w > s.h;
-    const img = Sprites.get(horizontal ? "hedge_h" : "hedge_v");
-    g.fillStyle = HEDGE_DARK;
+    const img = Sprites.get(style === "hedge" ? (horizontal ? "hedge_h" : "hedge_v") : `border_${style}_${horizontal ? "h" : "v"}`);
+    g.fillStyle = BORDER_DARK[style] || HEDGE_DARK;
     g.fillRect(s.x, s.y, s.w, s.h);
     if (!img) return;
     g.save();
@@ -433,6 +440,18 @@ const Render = (() => {
     const wallX = prop.side === "left" ? t / 2 : W - t / 2;
     const inward = prop.side === "left" ? 1 : -1;
     const S = Sprites.get;
+    // Un grand élément d'une seule pièce : tout en surplomb, son pied caché
+    // dans le mur. La statue porte une lanterne, le champignon luit.
+    if (prop.type === "tall") {
+      const img = S(prop.name);
+      if (!img) return {};
+      const x = Math.round(wallX + inward * 6 - img.w / 2), y = prop.y - img.h, flip = inward < 0;
+      const glow = { tall_statue: [0.84, 0.42], tall_mushroom: [0.5, 0.3] }[prop.name];
+      return {
+        top: { img, x, y, flip },
+        light: glow && { x: x + img.w * (flip ? 1 - glow[0] : glow[0]), y: y + img.h * glow[1] },
+      };
+    }
     if (prop.type === "tree") {
       const trunk = S("tree_trunk"), top = S("tree_top");
       if (!trunk || !top) return {};
@@ -504,6 +523,10 @@ const Render = (() => {
     for (const prop of dress.props) {
       const light = propParts(prop).light;
       if (light) lights.push({ ...light, r: 52 * flicker, warm: true });
+    }
+    // Les petites lanternes et bougies posées au sol.
+    for (const { solid: s, at } of dress.lights) {
+      lights.push({ x: s.x + s.w / 2, y: s.y + s.h + 2 - 20 * (1 - at), r: 30 * flicker, warm: true });
     }
     if (state.fire) lights.push({ x: state.fire.x, y: state.fire.y, r: 72 * flicker, warm: true });
     if (state.portal) lights.push({ x: state.portal.x, y: state.portal.y, r: 46, warm: false });

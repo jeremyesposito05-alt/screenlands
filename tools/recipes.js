@@ -76,6 +76,21 @@ const RECIPES = [
   { src: "rock_sheet.webp", pick: 0, w: 16, h: 16, out: "rock_small_a" },
   { src: "rock_sheet.webp", pick: 1, w: 16, h: 16, out: "rock_small_b" },
 
+  // Le décor varié (planches A à E) : obstacles de 2 × 2 tuiles, petits d'une
+  // tuile, murets intérieurs, grands éléments qui surplombent depuis les murs
+  // de côté, et quatre bordures (droite, angle, montant).
+  ...["stump", "log", "bramble", "fox", "column", "crates", "crystal", "mushrooms", "well"]
+    .map((k, pick) => ({ src: "decor_big_sheet.webp", pick, w: 36, h: 36, out: `obst_big_${k}`, colors: 24 })),
+  ...["menhir", "jar", "stump", "lantern", "boulder", "post", "reeds", "candle"]
+    .map((k, pick) => ({ src: "decor_small_sheet.webp", pick, w: 19, h: 20, out: `obst_small_${k}`, colors: 20 })),
+  ...["stone", "fence", "flowers", "roots", "ruin", "boulders"]
+    .map((k, pick) => ({ src: "decor_walls_sheet.webp", pick, w: 66, h: 46, out: `wall_${k}`, colors: 24 })),
+  ...["willow", "pine", "cherry", "arch", "statue", "totem", "banner", "mushroom"]
+    .map((k, pick) => ({ src: "decor_tall_sheet.webp", pick, link: 1, w: 46, h: 70, out: `tall_${k}`, colors: 28 })),
+  ...["flowers", "stone", "fence", "cliff"].flatMap((k, row) => [["h", 36, 20], ["corner", 32, 30], ["v", 16, 30]]
+    .map(([part, w, h], col) => ({ src: "decor_border_sheet.webp", pick: row * 3 + col, link: 1, w, h,
+                                   out: `border_${k}_${part}`, colors: 20 }))),
+
   // La haie qui borde les salles.
   { src: "hedge_sheet.webp", pick: 0, w: 32, h: 18, out: "hedge_h" },
   { src: "hedge_sheet.webp", pick: 1, w: 22, h: 24, out: "hedge_corner" },

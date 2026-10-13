@@ -291,7 +291,7 @@ src/weapons.js       les armes en action : coups de mêlée et projectiles
 src/allies.js        les compagnons : la file, leurs attaques, la chute et le relèvement
 src/world.js         l'expédition et ses règles : gemmes, coups, camps, transitions
 src/sprites.js       charge les images de assets/sprites
-src/scenery.js       habille chaque zone : sol, détails, arbres et lampadaires
+src/scenery.js       habille chaque zone : sol, détails, bordure, obstacles, grands éléments
 src/sound.js         bruitages et musique, déclenchés par les événements de World
 src/render.js        tout ce qui dessine, et rien d'autre, en couches
 src/menu.js          menu principal, pause et outils du bac à sable
@@ -398,5 +398,19 @@ Pour retoucher un pixel, on change une lettre.
 
 Le décor reste du décor : collisions et règles ne lisent jamais les images.
 Arbres et lampadaires sont plantés dans l'épaisseur des murs ; seul leur haut
-déborde sur la salle. Une image manquante n'est pas une erreur : le rendu
+déborde sur la salle. 
+
+**Le décor varié** (planches `decor_*_sheet.webp`) : chaque salle tire ses
+habits avec la graine de la carte (on les retrouve en revenant) : une
+bordure parmi haie, haie fleurie, pierre, palissade et falaise ; deux ou
+trois sortes de gros obstacles parmi 9 (souche, tronc, roncier, statue de
+renard, colonne, caisses, cristaux, champignons, puits) et de petits parmi 8
+(menhir, jarre, souche, lanterne, rocher, poteau, roseaux, bougie : les deux
+qui brûlent éclairent) ; un muret parmi 6 pour les murs intérieurs ; et,
+sur les murs de côté, près d'une fois sur deux un des 8 grands éléments
+(saule, sapin, cerisier, arche, statue à lanterne, totem, bannière,
+champignon lumineux) à la place d'un arbre ou d'un lampadaire. Le camp et le
+palier gardent la haie.
+
+Une image manquante n'est pas une erreur : le rendu
 dessine alors l'ancienne forme de couleur.

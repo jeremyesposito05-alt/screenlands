@@ -22,6 +22,19 @@ const Scenery = (() => {
   const DOOR_CLEARANCE = 100;
   const PROP_SPACING = 90;
 
+  // Le décor varié des planches A à E. Chaque salle tire ses propres
+  // habits : une bordure, deux ou trois sortes de gros et de petits
+  // obstacles (un air de famille dans la salle, de la variété d'une salle à
+  // l'autre), un muret pour ses murs intérieurs.
+  const BIG = ["stump", "log", "bramble", "fox", "column", "crates", "crystal", "mushrooms", "well"];
+  const SMALL = ["menhir", "jar", "stump", "lantern", "boulder", "post", "reeds", "candle"];
+  const WALLS = ["stone", "fence", "flowers", "roots", "ruin", "boulders"];
+  const TALL = ["willow", "pine", "cherry", "arch", "statue", "totem", "banner", "mushroom"];
+  const BORDERS = ["flowers", "stone", "fence", "cliff"];
+  // Les petits obstacles qui éclairent : la hauteur de leur flamme, en
+  // fraction de leur image depuis le haut.
+  const GLOWS = { lantern: 0.45, candle: 0.2 };
+
   let seed = null;
   const cache = new Map();
 
@@ -36,6 +49,8 @@ const Scenery = (() => {
   function build(state, cx, cy) {
     const W = Config.ZONE_W, H = Config.ZONE_H, t = Config.WALL;
     const rng = makeRandom(deriveSeed(seed, cx, cy, 31));
+    // Un second tirage pour le décor varié, qui laisse le premier intact.
+    const look = makeRandom(deriveSeed(seed, cx, cy, 37));
     const layout = Object.keys(LAYOUTS).find((k) => LAYOUTS[k] === state.zone);
     const exits = ZoneRegistry.exits(cx, cy);
 
@@ -67,12 +82,34 @@ const Scenery = (() => {
         ys.push(y);
       }
       for (const y of ys) {
+        // Près de la moitié des fois, un des grands éléments de la planche D.
+        if (look.chance(0.45)) { props.push({ type: "tall", name: `tall_${look.pick(TALL)}`, side, y }); continue; }
         props.push({ type: rng.chance(layout === "base" || layout === "landing" ? 0.3 : 0.65) ? "tree" : "lamp", side, y });
       }
     }
 
-    return { ground: DIRT.has(layout) ? "ground_dirt" : "ground_grass", decals, props };
+    // Les habits des obstacles, posés une fois pour toutes par position. Le
+    // camp de base et le palier gardent la haie d'origine.
+    const safe = layout === "base" || layout === "landing";
+    const border = safe || look.chance(0.2) ? "hedge" : look.pick(BORDERS);
+    const bigs = look.shuffle(["rock", ...BIG]).slice(0, 2 + look.int(2));
+    const smalls = look.shuffle(["rock", ...SMALL]).slice(0, 2 + look.int(2));
+    const wall = look.pick(WALLS);
+    const skins = new Map(), lights = [];
+    for (const s of state.solids) {
+      if (s.kind !== "rock") continue;
+      let name;
+      if (s.w !== s.h) name = `wall_${wall}`;
+      else {
+        const big = s.w > Config.TILE, k = look.pick(big ? bigs : smalls);
+        name = k === "rock" ? `${big ? "rock" : "rock_small"}_${look.chance(0.5) ? "a" : "b"}` : `obst_${big ? "big" : "small"}_${k}`;
+        if (!big && GLOWS[k] !== undefined) lights.push({ solid: s, at: GLOWS[k] });
+      }
+      skins.set(`${s.x},${s.y}`, { name, flip: look.chance(0.5) && !/fox|statue/.test(name) });
+    }
+
+    return { ground: DIRT.has(layout) ? "ground_dirt" : "ground_grass", decals, props, border, skins, lights };
   }
 
-  return { dress };
+  return { dress, BIG, SMALL, WALLS, TALL, BORDERS };
 })();
